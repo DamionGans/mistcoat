@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+samples/out/
+release/
+.venv-mac/
+mobile/node_modules/

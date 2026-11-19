@@ -1,0 +1,11 @@
+{
+  "appId": "app.mistcoat.mobile",
+  "appName": "Mistcoat",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "automatic"
+  }
+}

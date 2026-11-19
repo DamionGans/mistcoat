@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mistcoat-mobile",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["mobile/tools/serve.mjs", "5317"],
+      "port": 5317
+    }
+  ]
+}

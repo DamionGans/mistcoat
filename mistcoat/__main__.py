@@ -1,0 +1,7 @@
+"""`python -m mistcoat` launches the GUI."""
+import sys
+
+from .gui.app import run
+
+if __name__ == "__main__":
+    sys.exit(run())

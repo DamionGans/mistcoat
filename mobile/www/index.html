@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1e2229" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f4f1ec" media="(prefers-color-scheme: light)">
+  <meta name="description" content="Protect your artwork from AI training and style mimicry. Everything happens on your device.">
+  <title>Mistcoat</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <img src="icon-192.png" alt="" class="logo" width="36" height="36">
+    <div>
+      <h1>Mistcoat</h1>
+      <p class="tag">Protect your art from AI training</p>
+    </div>
+  </header>
+
+  <main>
+    <!-- Empty state -->
+    <section id="empty" class="card dropzone">
+      <svg viewBox="0 0 48 48" width="48" height="48" aria-hidden="true"><path d="M8 34l10-12 8 9 6-7 8 10z M8 12h32v26H8z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><circle cx="31" cy="19" r="3" fill="currentColor"/></svg>
+      <h2>Choose artwork to protect</h2>
+      <p class="muted">Photos of physical pieces and digital files both work. Nothing is uploaded; all processing happens on this device.</p>
+      <label class="btn primary big">
+        Choose images
+        <input type="file" id="picker" accept="image/*" multiple hidden>
+      </label>
+    </section>
+
+    <!-- Working state -->
+    <section id="work" hidden>
+      <div id="thumbs" class="thumbs" role="listbox" aria-label="Selected images"></div>
+
+      <div class="card viewer-card">
+        <div id="viewer" class="viewer" aria-label="Before and after comparison">
+          <canvas id="before"></canvas>
+          <canvas id="after"></canvas>
+          <div id="handle" class="handle" aria-hidden="true"><span></span></div>
+          <div id="busy" class="busy" hidden><div class="spinner"></div></div>
+          <span class="corner left">Original</span>
+          <span class="corner right">Protected</span>
+        </div>
+        <div class="viewer-tools">
+          <button id="hold" class="btn ghost" type="button">Hold to compare</button>
+          <button id="zoom" class="btn ghost" type="button" aria-pressed="false">View 1:1</button>
+        </div>
+        <p id="imgnote" class="note" hidden></p>
+      </div>
+
+      <div class="card metrics" id="metrics" aria-live="polite">
+        <div class="metric"><span class="k">Visible change</span><span class="v" id="m-vis">–</span></div>
+        <div class="metric"><span class="k">Durability</span><span class="v" id="m-dur">–</span></div>
+        <div class="metric"><span class="k">PSNR</span><span class="v" id="m-psnr">–</span></div>
+        <div class="metric"><span class="k">Peak change</span><span class="v" id="m-peak">–</span></div>
+        <p class="fine">Durability is measured against re-encodes the app never optimised for (JPEG, WebP, downscaling), on a screen-sized copy.</p>
+      </div>
+
+      <div class="card">
+        <h3>Protection level</h3>
+        <div id="presets" class="segmented" role="radiogroup" aria-label="Protection level"></div>
+        <p id="preset-blurb" class="muted small"></p>
+
+        <label class="slider-row">
+          <span>Strength</span>
+          <input type="range" id="strength" min="5" max="100" step="1">
+          <output id="strength-out">60%</output>
+        </label>
+
+        <details>
+          <summary>Advanced</summary>
+          <fieldset>
+            <legend>What to disrupt</legend>
+            <div id="passes"></div>
+          </fieldset>
+          <label class="check"><input type="checkbox" id="harden"> <span>Harden against re-compression <small class="muted">(slower, more durable)</small></span></label>
+          <label class="check"><input type="checkbox" id="optout"> <span>Embed “do not train” metadata</span></label>
+          <label class="field"><span>Artist name</span><input type="text" id="credit" autocomplete="name" placeholder="Optional"></label>
+          <label class="field"><span>Copyright notice</span><input type="text" id="copyright" placeholder="Optional"></label>
+          <label class="field"><span>Save as</span>
+            <select id="format"><option value="png">PNG (lossless, recommended)</option><option value="jpeg">JPEG</option></select>
+          </label>
+          <label class="field"><span>Maximum resolution</span>
+            <select id="maxpx">
+              <option value="8000000">8 MP (works on any phone)</option>
+              <option value="16000000">16 MP (newer phones)</option>
+              <option value="36000000">36 MP (computers only)</option>
+            </select>
+          </label>
+        </details>
+      </div>
+
+      <div class="actions">
+        <label class="btn ghost">
+          Add more
+          <input type="file" id="picker-more" accept="image/*" multiple hidden>
+        </label>
+        <button id="go" class="btn primary big" type="button">Protect and save</button>
+      </div>
+
+      <div id="progress" class="card progress" hidden>
+        <div class="bar"><div id="bar-fill"></div></div>
+        <p id="progress-text" class="muted small"></p>
+      </div>
+
+      <div id="results" class="card" hidden>
+        <h3>Protected</h3>
+        <ul id="result-list" class="results"></ul>
+        <button id="save-all" class="btn" type="button" hidden>Save all</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>No tool can make an image impossible to train on.</strong> Mistcoat raises the cost and spoils the result; it is not a guarantee. Always keep your unprotected originals, and upload only the protected copies.</p>
+    <p class="muted"><button id="about" class="linkish" type="button">What this actually does</button></p>
+  </footer>
+
+  <dialog id="about-dialog">
+    <form method="dialog">
+      <h2>What Mistcoat does</h2>
+      <p>It makes small, mostly invisible changes that degrade an image's value as AI training data. It disrupts the fine texture statistics models learn from, scrambles the local stroke patterns that make up your style, perturbs colour where the eye cannot follow, and writes the change into the parts of the file that survive being re-compressed.</p>
+      <p>It also embeds the IPTC <em>do not mine</em> metadata, a machine-readable statement that the work is not licensed for AI training.</p>
+      <h3>What it does not do</h3>
+      <p>It cannot make an image impossible to train on. A determined party can reduce or defeat any protection of this kind; published research has broken every tool in this category to some degree. Treat it as raising the cost, not as a lock.</p>
+      <p>Your images never leave this device.</p>
+      <button class="btn primary" value="close">Close</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

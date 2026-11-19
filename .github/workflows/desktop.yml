@@ -1,0 +1,65 @@
+name: Desktop builds
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt pytest
+      - run: python -m pytest tests -q
+
+  windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build and self-test
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          ./packaging/build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mistcoat-windows-x64
+          path: dist/Mistcoat.exe
+
+  macos:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14     # Apple Silicon
+            arch: arm64
+          - runner: macos-13     # Intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Build, sign and self-test
+        env:
+          PYTHON: python
+          # Optional - set these repository secrets to ship a notarised build.
+          MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
+        run: ./packaging/build_mac.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Mistcoat-macos-${{ matrix.arch }}
+          path: dist/*.dmg
