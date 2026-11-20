@@ -11,8 +11,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - run: pip install -r requirements.txt pytest
@@ -22,8 +22,8 @@ jobs:
     needs: test
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Build and self-test
@@ -31,7 +31,7 @@ jobs:
         run: |
           python -m venv .venv
           ./packaging/build_windows.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Mistcoat-windows-x64
           path: dist/Mistcoat.exe
@@ -42,14 +42,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-14     # Apple Silicon
+          - runner: macos-15        # Apple Silicon
             arch: arm64
-          - runner: macos-13     # Intel
+          - runner: macos-15-intel  # Intel
             arch: x86_64
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       - name: Build, sign and self-test
@@ -59,7 +59,7 @@ jobs:
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
           MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
         run: ./packaging/build_mac.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: Mistcoat-macos-${{ matrix.arch }}
           path: dist/*.dmg
