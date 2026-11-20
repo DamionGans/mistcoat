@@ -15,7 +15,9 @@ store accounts, which only the publisher can set up.
    change them in `packaging/mistcoat.spec`, `mobile/capacitor.config.json`,
    then run `npx cap sync`. They cannot change after a store release.
 3. **Bump the version** in `mistcoat/__init__.py`, `packaging/win_version.txt`,
-   `mobile/package.json`, the `VERSION` constant in `mobile/www/sw.js`, and
+   `mobile/package.json`, `MARKETING_VERSION` in
+   `mobile/ios/App/App.xcodeproj/project.pbxproj`, `versionName` (and
+   `versionCode`) in `mobile/android/app/build.gradle`, the `VERSION` constant in `mobile/www/sw.js`, and
    add a `<release>` line to `packaging/linux/app.mistcoat.Mistcoat.metainfo.xml`.
 4. **Pick a licence.** There is no LICENSE file yet, so the Linux packages
    declare the app proprietary (`license:` in `packaging/linux/nfpm.yaml`,
@@ -96,6 +98,25 @@ Can only be built on a Mac with Xcode.
 
 CI compiles the iOS app for the simulator on every push (unsigned), so build
 breakage is caught even without a Mac to hand.
+
+### Testing on an iPhone without a Mac (sideloading)
+
+Every CI run also produces `Mistcoat-<ver>-ios-unsigned.ipa` (artifact
+*Mistcoat-ios-unsigned-ipa*). iOS refuses unsigned apps, so a sideloading
+tool signs it with your own Apple ID on the way onto the phone:
+
+1. On Windows or a Mac, install **Sideloadly** (or **AltStore**).
+2. Connect the iPhone by cable and trust the computer.
+3. Drop the `.ipa` into Sideloadly, enter your Apple ID, and start.
+4. On the phone: *Settings → General → VPN & Device Management*, trust your
+   Apple ID's developer profile. On iOS 16+ also enable *Settings → Privacy
+   & Security → Developer Mode* and restart when asked.
+
+With a free Apple ID the app stops opening after **7 days** and must be
+sideloaded again (AltStore can refresh it automatically over Wi-Fi), and at
+most three sideloaded apps can be active at a time. A paid developer account
+extends this to a year. This is for testing only; anyone else installing it
+needs their own Apple ID, or a TestFlight build.
 
 ## Web (optional)
 
