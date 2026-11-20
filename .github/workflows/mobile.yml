@@ -70,3 +70,25 @@ jobs:
         with:
           name: Mistcoat-ios-simulator
           path: mobile/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+      # An unsigned device build packed as an .ipa. It cannot be installed as
+      # is: a sideloading tool (Sideloadly, AltStore) signs it with the user's
+      # own Apple ID on the way onto the phone. See docs/RELEASING.md.
+      - name: Build unsigned IPA for devices
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination "generic/platform=iOS" \
+            -derivedDataPath build-device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          VERSION=$(node -p "require('../../package.json').version")
+          APP=build-device/Build/Products/Release-iphoneos/App.app
+          test -x "$APP/App"
+          lipo -info "$APP/App"
+          rm -rf ipa && mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry "Mistcoat-${VERSION}-ios-unsigned.ipa" Payload)
+          ls -la ipa/*.ipa
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Mistcoat-ios-unsigned-ipa
+          path: mobile/ios/App/ipa/*.ipa
