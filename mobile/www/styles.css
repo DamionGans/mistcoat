@@ -53,7 +53,12 @@ body {
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-main, .top, footer { max-width: 1100px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+main, .top, footer { max-width: 1280px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+
+/* How tall the preview may get. Phones: about half the screen, so the level
+   and the save button stay in reach whatever the picture's shape or size.
+   Side-by-side layouts: the full height beside the controls. */
+:root { --viewer-max: min(46svh, 520px); }
 
 .top { display: flex; align-items: center; gap: 12px; padding-top: 18px; padding-bottom: 8px; }
 .top h1 { margin: 0; font-size: 1.35rem; letter-spacing: 0.01em; }
@@ -110,13 +115,23 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; colo
 .viewer-card { padding: 10px; }
 .viewer {
   position: relative; background: var(--canvas); border-radius: 10px; overflow: hidden;
-  touch-action: none; user-select: none; min-height: 200px;
+  touch-action: none; user-select: none; min-height: 160px;
+  display: flex; align-items: center; justify-content: center;
 }
-.viewer canvas { display: block; width: 100%; height: auto; }
-.viewer #after { position: absolute; inset: 0; }
-.viewer.zoomed { overflow: auto; touch-action: pan-x pan-y; max-height: 70vh; }
-.viewer.zoomed canvas { width: auto; max-width: none; }
-.viewer.zoomed #after { position: absolute; top: 0; left: 0; }
+/* Letterboxed: scaled down to fit both the width and --viewer-max, never
+   stretched, never cropped. */
+.stage { position: relative; line-height: 0; }
+.viewer canvas {
+  display: block; width: auto; height: auto;
+  max-width: 100%; max-height: var(--viewer-max);
+}
+.stage #after { position: absolute; inset: 0; width: 100%; height: 100%; }
+.viewer.zoomed {
+  overflow: auto; touch-action: pan-x pan-y; max-height: var(--viewer-max);
+  display: block;
+}
+.viewer.zoomed .stage { width: max-content; }
+.viewer.zoomed canvas { max-width: none; max-height: none; }
 .handle { position: absolute; top: 0; bottom: 0; width: 0; border-left: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.25); pointer-events: none; }
 .handle span {
   position: absolute; top: 50%; left: -15px; width: 28px; height: 28px; margin-top: -14px;
@@ -189,9 +204,26 @@ dialog {
 }
 dialog::backdrop { background: rgba(0,0,0,.45); }
 
-/* Wide screens: viewer left, controls right. */
-@media (min-width: 900px) {
-  #work { display: grid; grid-template-columns: 1.5fr 1fr; gap: 0 18px; align-items: start; }
+/* Tablets and wider: preview on the left, pinned while the settings scroll
+   on the right. iPad portrait (768-834 px) already fits two columns. */
+@media (min-width: 740px) {
+  :root { --viewer-max: calc(100svh - 230px); }
+  #work {
+    display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+    gap: 0 20px; align-items: start;
+  }
   #thumbs, .actions, #progress, #results { grid-column: 1 / -1; }
-  .viewer-card { grid-row: span 3; }
+  .viewer-card { grid-row: span 3; position: sticky; top: 12px; margin-top: 12px; }
+  .thumb { width: 76px; height: 76px; }
+  .dropzone { max-width: 640px; margin-left: auto; margin-right: auto; padding: 56px 32px; }
+  .actions { justify-content: flex-end; }
+  .actions .primary { flex: 0 1 360px; }
+}
+@media (min-width: 1180px) {
+  #work { grid-template-columns: minmax(0, 1.8fr) minmax(340px, 1fr); }
+}
+/* Landscape phones: short screens, keep the preview small. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root { --viewer-max: 70svh; }
+  .viewer-card { position: static; }
 }

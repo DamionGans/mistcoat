@@ -42,9 +42,13 @@
 
       <div class="card viewer-card">
         <div id="viewer" class="viewer" aria-label="Before and after comparison">
-          <canvas id="before"></canvas>
-          <canvas id="after"></canvas>
-          <div id="handle" class="handle" aria-hidden="true"><span></span></div>
+          <!-- The stage is exactly the image's displayed size, so the wipe
+               lines up however the picture is letterboxed. -->
+          <div id="stage" class="stage">
+            <canvas id="before"></canvas>
+            <canvas id="after"></canvas>
+            <div id="handle" class="handle" aria-hidden="true"><span></span></div>
+          </div>
           <div id="busy" class="busy" hidden><div class="spinner"></div></div>
           <span class="corner left">Original</span>
           <span class="corner right">Protected</span>

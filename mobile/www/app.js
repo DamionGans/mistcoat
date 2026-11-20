@@ -190,7 +190,7 @@ function setupViewer() {
   let dragging = false;
   const move = (ev) => {
     if (v.classList.contains("zoomed")) return;
-    const r = v.getBoundingClientRect();
+    const r = $("stage").getBoundingClientRect();
     state.split = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
     applySplit();
   };

@@ -212,6 +212,11 @@
   position: sticky; top: 0; z-index: 2; background: var(--bg);
   min-height: 64px; padding-top: 8px; padding-bottom: 8px;
 }
+@media (min-width: 740px) {
+  [data-platform="android"] .viewer-card { top: 76px; }
+  [data-platform="android"] { --viewer-max: calc(100svh - 300px); }
+}
+
 /* Material "on scroll" state: the bar takes the container colour. */
 [data-platform="android"] .top.scrolled { background: var(--surface); transition: background 0.2s; }
 [data-platform="android"] .top .logo { width: 32px; height: 32px; border-radius: 50%; }
