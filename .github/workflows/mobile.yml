@@ -40,13 +40,58 @@ jobs:
           java-version: "21"
       - run: npm ci
       - run: npx cap sync android
-      - name: Build debug APK
+      # Release build, signed. With the ANDROID_KEYSTORE_BASE64 (and password
+      # / alias) secrets set, every build is signed with the same key, so new
+      # versions install over old ones and Google Play accepts the .aab.
+      # Without them a one-off key is made for this run: the APK installs,
+      # but replacing it with a later build needs an uninstall first.
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KS="$RUNNER_TEMP/mistcoat-release.jks"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$KS"
+            echo "Signing with the repository's release key."
+          else
+            KS_PASS=$(openssl rand -hex 24); KEY_PASS="$KS_PASS"; KEY_ALIAS=mistcoat
+            keytool -genkeypair -keystore "$KS" -storepass "$KS_PASS" -keypass "$KEY_PASS" \
+              -alias "$KEY_ALIAS" -keyalg RSA -keysize 4096 -validity 10000 \
+              -dname "CN=Mistcoat" -noprompt
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signed with a one-off key. See docs/RELEASING.md."
+          fi
+          echo "::add-mask::$KS_PASS"; echo "::add-mask::$KEY_PASS"
+          {
+            echo "MISTCOAT_KEYSTORE=$KS"
+            echo "MISTCOAT_KEYSTORE_PASSWORD=$KS_PASS"
+            echo "MISTCOAT_KEY_ALIAS=$KEY_ALIAS"
+            echo "MISTCOAT_KEY_PASSWORD=$KEY_PASS"
+          } >> "$GITHUB_ENV"
+      - name: Build release APK and App Bundle
         working-directory: mobile/android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          ./gradlew assembleRelease bundleRelease --no-daemon
+          VERSION=$(node -p "require('../package.json').version")
+          mkdir -p ../dist
+          cp app/build/outputs/apk/release/app-release.apk "../dist/Mistcoat-${VERSION}-android.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "../dist/Mistcoat-${VERSION}-android.aab"
+          # Prove it is a signed, non-debuggable release.
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          "$APKSIGNER" verify --print-certs "../dist/Mistcoat-${VERSION}-android.apk" | head -3
+          AAPT=$(ls "$ANDROID_HOME"/build-tools/*/aapt2 | sort -V | tail -1)
+          if "$AAPT" dump badging "../dist/Mistcoat-${VERSION}-android.apk" | grep -q "application-debuggable"; then
+            echo "APK is debuggable" >&2; exit 1
+          fi
+          "$AAPT" dump badging "../dist/Mistcoat-${VERSION}-android.apk" | grep -E "^package:"
       - uses: actions/upload-artifact@v7
         with:
-          name: Mistcoat-android-debug
-          path: mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          name: Mistcoat-android
+          path: |
+            mobile/dist/*.apk
+            mobile/dist/*.aab
 
   ios:
     needs: test
@@ -60,16 +105,16 @@ jobs:
           cache-dependency-path: mobile/package-lock.json
       - run: npm ci
       - run: npx cap sync ios
-      - name: Build for the iOS simulator (no signing)
+      - name: Build for the iOS simulator (release configuration, no signing)
         working-directory: mobile/ios/App
         run: |
-          xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
             -sdk iphonesimulator -destination "generic/platform=iOS Simulator" \
             -derivedDataPath build CODE_SIGNING_ALLOWED=NO build
       - uses: actions/upload-artifact@v7
         with:
           name: Mistcoat-ios-simulator
-          path: mobile/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          path: mobile/ios/App/build/Build/Products/Release-iphonesimulator/App.app
       # An unsigned device build packed as an .ipa. It cannot be installed as
       # is: a sideloading tool (Sideloadly, AltStore) signs it with the user's
       # own Apple ID on the way onto the phone. See docs/RELEASING.md.

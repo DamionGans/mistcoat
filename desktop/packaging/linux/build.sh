@@ -3,7 +3,9 @@
 #
 #   ./desktop/packaging/linux/build.sh
 #
-# Needs Python 3.11+, curl, and for the Flatpak: flatpak with the Flathub remote
+# Needs Python 3.11+, curl, snapcraft for the Snap (SKIP_SNAP=1 to leave it
+# out; it builds with --destructive-mode, so run it on Ubuntu 22.04 to match
+# the snap's core22 base), and for the Flatpak: flatpak with the Flathub remote
 # and a current flatpak-builder. Distro packages of flatpak-builder older than
 # 1.4 cannot build for the 25.08 runtime; the Flathub build works everywhere:
 #   flatpak install --user flathub org.flatpak.Builder
@@ -14,6 +16,7 @@
 #   mistcoat-<ver>-1.<x86_64|aarch64>.rpm
 #   Mistcoat-<ver>-linux-<arch>.AppImage
 #   Mistcoat-<ver>-linux-<arch>.flatpak
+#   mistcoat_<ver>_<amd64|arm64>.snap
 #
 # Build on the oldest distro you want to support (CI uses Ubuntu 22.04): the
 # binaries only run on systems whose glibc is at least as new.
@@ -134,7 +137,24 @@ APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$ARCH" "$TOOLS/appimagetool-${ARCH}.AppImage" \
 "$APPIMAGE" --appimage-extract-and-run --selftest dist/selftest-appimage.json
 grep -q '"ok": true' dist/selftest-appimage.json
 
-# 6. Flatpak bundle.
+# 6. Snap.
+if [ "${SKIP_SNAP:-0}" != "1" ]; then
+  SNAPDIR=dist/linux/snap
+  rm -rf "$SNAPDIR"
+  mkdir -p "$SNAPDIR/snap/gui" "$SNAPDIR/root/opt"
+  sed "s/@VERSION@/$VERSION/" packaging/linux/snap/snapcraft.yaml > "$SNAPDIR/snap/snapcraft.yaml"
+  cp packaging/linux/snap/mistcoat.desktop "$SNAPDIR/snap/gui/mistcoat.desktop"
+  cp "$SHARE/icons/hicolor/256x256/apps/$APP_ID.png" "$SNAPDIR/snap/gui/mistcoat.png"
+  cp -a dist/Mistcoat "$SNAPDIR/root/opt/mistcoat"
+  mkdir -p "$SNAPDIR/root/usr/share"
+  cp -a "$SHARE/metainfo" "$SNAPDIR/root/usr/share/metainfo"
+  # Destructive mode installs the build snaps/packages on this machine: root.
+  SUDO=""; [ "$(id -u)" = "0" ] || SUDO="sudo"
+  (cd "$SNAPDIR" && $SUDO snapcraft pack --destructive-mode --output "../../mistcoat_${VERSION}_${NFPM_ARCH}.snap")
+  echo "Built dist/mistcoat_${VERSION}_${NFPM_ARCH}.snap"
+fi
+
+# 7. Flatpak bundle.
 if [ "${SKIP_FLATPAK:-0}" != "1" ]; then
   SRC=dist/linux/flatpak-src
   mkdir -p "$SRC"
@@ -148,4 +168,4 @@ if [ "${SKIP_FLATPAK:-0}" != "1" ]; then
   echo "Built $FLATPAK"
 fi
 
-ls -la dist/*.deb dist/*.rpm dist/*.AppImage dist/*.flatpak 2>/dev/null || true
+ls -la dist/*.deb dist/*.rpm dist/*.AppImage dist/*.flatpak dist/*.snap 2>/dev/null || true

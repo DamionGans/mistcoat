@@ -26,21 +26,33 @@ jobs:
 
   windows:
     needs: test
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest   # Intel / AMD
+            arch: x64
+          - runner: windows-11-arm   # Snapdragon and other ARM PCs, built natively
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
+          architecture: ${{ matrix.arch }}
       - name: Build and self-test
         shell: pwsh
         run: |
           python -m venv .venv
           ./packaging/windows/build.ps1
+          $arch = & .\.venv\Scripts\python.exe -c "import platform; print(platform.machine())"
+          Write-Host "Built for $arch"
+          Rename-Item dist\Mistcoat.exe "Mistcoat-$((& .\.venv\Scripts\python.exe -c 'import mistcoat; print(mistcoat.__version__)'))-windows-${{ matrix.arch }}.exe"
       - uses: actions/upload-artifact@v7
         with:
-          name: Mistcoat-windows-x64
-          path: desktop/dist/Mistcoat.exe
+          name: Mistcoat-windows-${{ matrix.arch }}
+          path: desktop/dist/Mistcoat-*-windows-*.exe
 
   macos:
     needs: test
@@ -97,6 +109,7 @@ jobs:
             libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
             libxcb-render-util0 libxcb-image0 \
             libwayland-client0 libwayland-cursor0 libwayland-egl1
+          sudo snap install snapcraft --classic
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           # Ubuntu 22.04's flatpak-builder is too old for the 25.08 runtime.
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder \
@@ -135,6 +148,17 @@ jobs:
             QT_QPA_PLATFORM=xcb xvfb-run -a squashfs-root/AppRun --selftest /tmp/r.json
             cat /tmp/r.json; grep -q "\"qt_platform\": \"xcb\"" /tmp/r.json
             grep -q "\"ok\": true" /tmp/r.json'
+      - name: Test the Snap (strict confinement, real X display)
+        run: |
+          sudo snap install --dangerous ./dist/mistcoat_*.snap
+          sudo apt-get install -y -qq xvfb xauth > /dev/null
+          # Headless, then with the real X11 plugin through the snap's x11 plug.
+          snap run mistcoat --selftest "$HOME/snap-selftest.json"
+          cat "$HOME/snap-selftest.json"; grep -q '"ok": true' "$HOME/snap-selftest.json"
+          QT_QPA_PLATFORM=xcb xvfb-run -a snap run mistcoat --selftest "$HOME/snap-xcb.json"
+          cat "$HOME/snap-xcb.json"
+          grep -q '"qt_platform": "xcb"' "$HOME/snap-xcb.json"
+          grep -q '"ok": true' "$HOME/snap-xcb.json"
       - name: Test the .rpm (Fedora and openSUSE)
         run: |
           docker run --rm -v "$PWD/dist:/d" fedora:43 sh -c \
@@ -156,3 +180,4 @@ jobs:
             desktop/dist/*.rpm
             desktop/dist/*.AppImage
             desktop/dist/*.flatpak
+            desktop/dist/*.snap

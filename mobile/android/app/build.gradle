@@ -16,8 +16,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing. The key comes from the environment so it never lives in
+    // the repository: MISTCOAT_KEYSTORE (path to a .jks), MISTCOAT_KEYSTORE_PASSWORD,
+    // MISTCOAT_KEY_ALIAS, MISTCOAT_KEY_PASSWORD. CI sets these from repository
+    // secrets, or from a one-off key when none are configured (docs/RELEASING.md).
+    signingConfigs {
+        release {
+            def ks = System.getenv("MISTCOAT_KEYSTORE")
+            if (ks) {
+                storeFile file(ks)
+                storePassword System.getenv("MISTCOAT_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("MISTCOAT_KEY_ALIAS")
+                keyPassword System.getenv("MISTCOAT_KEY_PASSWORD")
+            }
+        }
+    }
     buildTypes {
         release {
+            if (System.getenv("MISTCOAT_KEYSTORE")) {
+                signingConfig signingConfigs.release
+            }
+            debuggable false
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

@@ -1,0 +1,39 @@
+# Snap package. build.sh copies this into desktop/dist/linux/snap/, fills in
+# @VERSION@, stages the self-contained PyInstaller build next to it as
+# root/, and runs `snapcraft pack` there.
+name: mistcoat
+base: core22
+version: '@VERSION@'
+title: Mistcoat
+summary: Protect artwork from AI training and style mimicry
+description: |
+  Mistcoat makes small, mostly invisible changes to an image that degrade its
+  value as AI training data and confuse models about what it shows, and
+  embeds the standard machine-readable "do not train" declaration.
+
+  Everything runs on your computer; no image is ever uploaded. A preview shows
+  exactly how much the picture changed and how much of the protection
+  survives the re-compression that upload sites apply.
+
+  No tool can make an image impossible to train on. Mistcoat raises the cost
+  and spoils the result. Keep your unprotected originals.
+license: Proprietary
+website: https://mistcoat.app
+grade: stable
+confinement: strict
+
+apps:
+  mistcoat:
+    command: opt/mistcoat/Mistcoat
+    common-id: app.mistcoat.Mistcoat
+    # Supplies OpenGL/Vulkan drivers, fonts, themes and the desktop portals
+    # (file dialogs) from the shared GNOME platform snap.
+    extensions: [gnome]
+    plugs:
+      - home              # read the artwork, write protected copies beside it
+      - removable-media   # artwork on USB drives and memory cards
+
+parts:
+  mistcoat:
+    plugin: dump
+    source: root

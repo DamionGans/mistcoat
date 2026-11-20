@@ -67,20 +67,35 @@ to install. For publishing:
   `flathub/flathub`. Flathub verifies the app ID's domain, so
   `app.mistcoat.Mistcoat` requires owning `mistcoat.app`.
 - **AppImage:** works as a download; optionally list it on AppImageHub.
-- **Snap** is not built. It can be added with a `snapcraft.yaml` if wanted.
+- **Snap Store:** the `.snap` is built strictly confined on the `core22`
+  base with the GNOME extension. To publish: `snapcraft register mistcoat`
+  (free Ubuntu One account), then `snapcraft upload --release=stable
+  mistcoat_<ver>_amd64.snap` and the arm64 one. Store-installed snaps do not
+  need `--dangerous` and update automatically.
 
 ## Android
 
-- **Sideloading / testing:** the debug APK from CI or
-  `mobile/android/app/build/outputs/apk/debug/` installs directly
+- **Sideloading / testing:** the signed release APK from CI (artifact
+  *Mistcoat-android*) installs directly
   (Settings → allow installs from this source).
+- **Release signing.** CI builds signed release `.apk` and `.aab` files.
+  `build.gradle` takes the key from `MISTCOAT_KEYSTORE`,
+  `MISTCOAT_KEYSTORE_PASSWORD`, `MISTCOAT_KEY_ALIAS` and `MISTCOAT_KEY_PASSWORD`.
+  In CI these come from four repository secrets: `ANDROID_KEYSTORE_BASE64`
+  (the `.jks` file, base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`,
+  `ANDROID_KEY_PASSWORD`. **Until they are set, every CI run signs with a
+  new one-off key**: the APK installs, but a newer build can only replace it
+  after uninstalling the old one, and Google Play will not accept it.
+  To set up a permanent key:
+  1. `keytool -genkeypair -v -keystore mistcoat-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 10000`
+  2. Store the `.jks` and both passwords somewhere safe (a password manager).
+     Losing them means the app can never be updated under the same identity.
+  3. `gh secret set ANDROID_KEYSTORE_BASE64 < <(base64 -w0 mistcoat-upload.jks)`
+     and `gh secret set` for the password and alias secrets.
 - **Google Play:**
   1. Create a Play Console developer account (one-time fee).
-  2. Generate an upload key: `keytool -genkeypair -v -keystore mistcoat-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 10000`
-     Keep it safe and out of git.
-  3. Add a `signingConfigs.release` block to `mobile/android/app/build.gradle`
-     that reads the keystore path and passwords from environment variables.
-  4. `cd mobile/android && ./gradlew bundleRelease` → upload the `.aab`.
+  2. Set up the permanent key above, enrol in Play App Signing, and upload
+     the `.aab` from CI.
   5. Play requires a privacy policy URL. Mistcoat collects nothing; the policy
      can say exactly that.
 

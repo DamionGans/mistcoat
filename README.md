@@ -174,10 +174,10 @@ cd mobile; npm run serve
 
 | Target | Where | Command | Output |
 |---|---|---|---|
-| Windows | Windows | `desktop\packaging\windows\build.ps1` | `desktop\dist\Mistcoat.exe` |
+| Windows (x64 or ARM64, built natively) | Windows | `desktop\packaging\windows\build.ps1` | `desktop\dist\Mistcoat.exe` |
 | macOS | a Mac | `./desktop/packaging/macos/build.sh` | `desktop/dist/Mistcoat-<ver>-macos-<arch>.dmg` |
-| Linux | Linux (oldest distro to support) | `./desktop/packaging/linux/build.sh` | `.deb`, `.rpm`, `.AppImage`, `.flatpak` in `desktop/dist/` |
-| Android | any (JDK 21 + Android SDK) | `cd mobile/android; ./gradlew assembleDebug` | `app-debug.apk` |
+| Linux | Linux (oldest distro to support) | `./desktop/packaging/linux/build.sh` | `.deb`, `.rpm`, `.AppImage`, `.flatpak`, `.snap` in `desktop/dist/` |
+| Android | any (JDK 21 + Android SDK) | `cd mobile/android; ./gradlew assembleRelease bundleRelease` (signing: see RELEASING) | release `.apk` and `.aab` |
 | iOS | a Mac with Xcode | `cd mobile; npx cap open ios`, then build in Xcode | |
 
 Every build self-tests: the desktop binaries run `--selftest`, which processes
@@ -227,8 +227,11 @@ newer (Ubuntu 22.04+, Debian 12+, Fedora 36+, openSUSE Tumbleweed, Mint 21+).
 | `.deb` (Ubuntu, Debian, Mint, Pop!_OS) | `sudo apt install ./mistcoat_0.1.0_amd64.deb` |
 | `.rpm` (Fedora, RHEL, openSUSE) | `sudo dnf install ./mistcoat-0.1.0-1.x86_64.rpm` (openSUSE: `sudo zypper install …`) |
 | Flatpak (any distro) | `flatpak install --user Mistcoat-0.1.0-linux-x86_64.flatpak` |
+| Snap (Ubuntu and any distro with snapd) | `sudo snap install --dangerous mistcoat_0.1.0_amd64.snap` |
 | AppImage (any distro, no install) | `chmod +x Mistcoat-*.AppImage`, then run it |
 
-The Flatpak pulls the Freedesktop 25.08 runtime from Flathub on first install.
+The Flatpak pulls the Freedesktop 25.08 runtime from Flathub on first install,
+and the Snap pulls the GNOME platform snap from the Snap Store. `--dangerous`
+is only needed because this file is not from the Store.
 The AppImage needs FUSE, which most desktops have; without it, run it with
 `--appimage-extract-and-run`.

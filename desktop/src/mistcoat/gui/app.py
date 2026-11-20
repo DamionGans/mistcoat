@@ -76,7 +76,8 @@ def _selftest(report_path: str) -> int:
                       durability=round(result.metrics.survival, 3),
                       seconds=round(result.seconds, 2),
                       qt_platform=app.platformName(),
-                      compute=accel.status()["using"])
+                      compute=accel.status()["using"],
+                      arch=__import__("platform").machine())
         del app
     except Exception:  # noqa: BLE001
         report["error"] = traceback.format_exc()

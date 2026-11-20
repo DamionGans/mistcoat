@@ -17,4 +17,4 @@ $proc = Start-Process .\dist\Mistcoat.exe -ArgumentList "--selftest", "dist\self
 if (-not (Test-Path dist\selftest.json)) { throw "Self-test wrote no report (exit code $($proc.ExitCode))" }
 $report = Get-Content dist\selftest.json -Raw | ConvertFrom-Json
 if (-not $report.ok) { throw "Self-test failed: $($report.error)" }
-Write-Host "Built dist\Mistcoat.exe - self-test passed (durability $($report.durability))"
+Write-Host "Built dist\Mistcoat.exe ($($report.arch)) - self-test passed (durability $($report.durability), $($report.compute))"
