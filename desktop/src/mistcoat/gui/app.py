@@ -49,7 +49,14 @@ def _selftest(report_path: str) -> int:
     report: dict = {"ok": False}
     try:
         from PySide6.QtWidgets import QApplication as _QA
-        app = _QA.instance() or _QA(["selftest", "-platform", "offscreen"])
+        import os
+        # Headless by default. With QT_QPA_PLATFORM set (e.g. "xcb" under
+        # Xvfb in CI) the real display plugin is loaded instead, which proves
+        # every library it needs is bundled.
+        args = ["selftest"]
+        if not os.environ.get("QT_QPA_PLATFORM"):
+            args += ["-platform", "offscreen"]
+        app = _QA.instance() or _QA(args)
         from ..core import pipeline
         from ..core.presets import PRESETS_BY_KEY
 
@@ -67,7 +74,8 @@ def _selftest(report_path: str) -> int:
                       saved=str(result.saved_to),
                       psnr=round(result.metrics.psnr, 2),
                       durability=round(result.metrics.survival, 3),
-                      seconds=round(result.seconds, 2))
+                      seconds=round(result.seconds, 2),
+                      qt_platform=app.platformName())
         del app
     except Exception:  # noqa: BLE001
         report["error"] = traceback.format_exc()

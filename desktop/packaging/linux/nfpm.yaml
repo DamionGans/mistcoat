@@ -28,8 +28,9 @@ contents:
     dst: /usr/share
     type: tree
 
-# Qt itself is bundled; these are the system libraries its X11/Wayland
-# platform plugins load at run time.
+# Everything else is bundled (see build.sh step 1). These are only the base
+# libraries every Linux desktop already has; listing them lets apt/dnf add
+# any that are missing automatically, during the same install.
 overrides:
   deb:
     depends:
@@ -37,14 +38,9 @@ overrides:
       - libgl1
       - libfontconfig1
       - libdbus-1-3
-      - libxkbcommon0
-      - libxkbcommon-x11-0
-      - libxcb-cursor0
-      - libxcb-icccm4
-      - libxcb-keysyms1
-      - libxcb-shape0
-      - libxcb-render-util0
-      - libxcb-image0
+      - libglib2.0-0 | libglib2.0-0t64
+      - libx11-xcb1
+      - libxcb1
       - libwayland-client0
       - libwayland-cursor0
       - libwayland-egl1
@@ -56,14 +52,9 @@ overrides:
       - libGL.so.1()(64bit)
       - libfontconfig.so.1()(64bit)
       - libdbus-1.so.3()(64bit)
-      - libxkbcommon.so.0()(64bit)
-      - libxkbcommon-x11.so.0()(64bit)
-      - libxcb-cursor.so.0()(64bit)
-      - libxcb-icccm.so.4()(64bit)
-      - libxcb-keysyms.so.1()(64bit)
-      - libxcb-shape.so.0()(64bit)
-      - libxcb-render-util.so.0()(64bit)
-      - libxcb-image.so.0()(64bit)
+      - libglib-2.0.so.0()(64bit)
+      - libX11-xcb.so.1()(64bit)
+      - libxcb.so.1()(64bit)
       - libwayland-client.so.0()(64bit)
       - libwayland-cursor.so.0()(64bit)
       - libwayland-egl.so.1()(64bit)

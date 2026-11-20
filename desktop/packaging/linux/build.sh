@@ -42,11 +42,39 @@ VERSION=$(python -c "import mistcoat; print(mistcoat.__version__)")
 rm -rf build/mistcoat dist/Mistcoat dist/linux
 python -m PyInstaller packaging/pyinstaller/mistcoat.spec --noconfirm --distpath dist --workpath build
 
-# 1. Prove the raw build works before wrapping it.
+# 1. Make the build self-contained. PyInstaller bundles Python, Qt, NumPy and
+#    Pillow, but not the small X11 helper libraries Qt's display plugins load
+#    (libxcb-cursor and friends). Many distros don't install those by default,
+#    which is the classic "could not load the Qt platform plugin xcb" error.
+#    Copy in everything the display plugins need except the libraries every
+#    Linux desktop has (libc, the GPU driver's GL/EGL, X11/Wayland core,
+#    fontconfig, D-Bus, GLib) - those must come from the system to match it.
+INTERNAL=dist/Mistcoat/_internal
+QT_PLUGINS="$INTERNAL/PySide6/Qt/plugins"
+HOST_LIBS='^(ld-linux.*|linux-vdso|libc|libm|libdl|libpthread|librt|libresolv|libutil|libgcc_s|libstdc\+\+|libz|libGL|libGLX|libGLdispatch|libOpenGL|libEGL|libgbm|libdrm|libfontconfig|libfreetype|libexpat|libpng16|libbrotli(common|dec)|libharfbuzz|libgraphite2|libdbus-1|libsystemd|libglib-2\.0|libgthread-2\.0|libgobject-2\.0|libgio-2\.0|libgmodule-2\.0|libffi|libpcre2?-8|libX11|libX11-xcb|libxcb|libXau|libXdmcp|libXext|libXrender|libwayland-(client|cursor|egl|server)|libbsd|libmd|libcap|libgcrypt|libgpg-error|liblzma|libzstd|liblz4|libselinux|libmount|libblkid|libuuid)\.so'
+bundled=0
+for lib in "$QT_PLUGINS"/platforms/*.so "$QT_PLUGINS"/xcbglintegrations/*.so \
+           "$QT_PLUGINS"/wayland-*/*.so "$INTERNAL"/PySide6/Qt/lib/libQt6XcbQpa.so.*; do
+  [ -e "$lib" ] || continue
+  while read -r name path; do
+    [[ "$name" =~ $HOST_LIBS ]] && continue
+    [ -e "$INTERNAL/$name" ] || [ -e "$INTERNAL/PySide6/Qt/lib/$name" ] && continue
+    cp -L "$path" "$INTERNAL/$name"
+    echo "bundled $name"
+    bundled=$((bundled + 1))
+  done < <(LD_LIBRARY_PATH="$INTERNAL:$INTERNAL/PySide6/Qt/lib" ldd "$lib" | awk '/=> \//{print $1, $3}')
+done
+echo "bundled $bundled extra libraries for Qt's display plugins"
+# Nothing may be left unresolved inside the bundle.
+if LD_LIBRARY_PATH="$INTERNAL:$INTERNAL/PySide6/Qt/lib" ldd "$QT_PLUGINS"/platforms/libqxcb.so | grep "not found"; then
+  echo "libqxcb.so has unresolved libraries" >&2; exit 1
+fi
+
+# 2. Prove the raw build works before wrapping it.
 dist/Mistcoat/Mistcoat --selftest dist/selftest.json
 cat dist/selftest.json
 
-# 2. Shared files: launcher entry, AppStream metadata, icons at every size.
+# 3. Shared files: launcher entry, AppStream metadata, icons at every size.
 SHARE=dist/linux/share
 install -Dm644 packaging/linux/$APP_ID.desktop "$SHARE/applications/$APP_ID.desktop"
 install -Dm644 packaging/linux/$APP_ID.metainfo.xml "$SHARE/metainfo/$APP_ID.metainfo.xml"
@@ -68,7 +96,7 @@ fetch() {  # url dest
   [ -f "$2" ] || curl -fsSL --retry 3 -o "$2" "$1"
 }
 
-# 3. .deb and .rpm (nfpm reads packaging/linux/nfpm.yaml).
+# 4. .deb and .rpm (nfpm reads packaging/linux/nfpm.yaml).
 ROOT=dist/linux/root
 mkdir -p "$ROOT/opt" "$ROOT/usr"
 cp -a dist/Mistcoat "$ROOT/opt/mistcoat"
@@ -85,7 +113,7 @@ export VERSION NFPM_ARCH
 "$TOOLS/nfpm" package --config packaging/linux/nfpm.yaml --packager deb --target dist/
 "$TOOLS/nfpm" package --config packaging/linux/nfpm.yaml --packager rpm --target dist/
 
-# 4. AppImage.
+# 5. AppImage.
 APPDIR=dist/linux/Mistcoat.AppDir
 mkdir -p "$APPDIR/usr/lib"
 cp -a dist/Mistcoat "$APPDIR/usr/lib/mistcoat"
@@ -106,7 +134,7 @@ APPIMAGE_EXTRACT_AND_RUN=1 ARCH="$ARCH" "$TOOLS/appimagetool-${ARCH}.AppImage" \
 "$APPIMAGE" --appimage-extract-and-run --selftest dist/selftest-appimage.json
 grep -q '"ok": true' dist/selftest-appimage.json
 
-# 5. Flatpak bundle.
+# 6. Flatpak bundle.
 if [ "${SKIP_FLATPAK:-0}" != "1" ]; then
   SRC=dist/linux/flatpak-src
   mkdir -p "$SRC"
