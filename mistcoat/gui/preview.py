@@ -139,10 +139,10 @@ class PreviewCanvas(QWidget):
 
     def paintEvent(self, event):  # noqa: N802
         p = QPainter(self)
-        p.fillRect(self.rect(), QColor(theme.CANVAS))
+        p.fillRect(self.rect(), theme.canvas_colour())
 
         if self._before is None:
-            p.setPen(QColor(theme.TEXT_DIM))
+            p.setPen(theme.canvas_text_colour())
             f = QFont()
             f.setPointSize(11)
             p.setFont(f)
@@ -169,7 +169,9 @@ class PreviewCanvas(QWidget):
         # The split handle leaves a filled brush behind; an outline must not
         # inherit it or it paints over the whole image.
         p.setBrush(Qt.NoBrush)
-        p.setPen(QPen(QColor(theme.LINE), 1))
+        p.setPen(QPen(theme.canvas_text_colour().darker(140)
+                      if theme.scheme_is_dark() else
+                      theme.canvas_text_colour().lighter(160), 1))
         p.drawRect(rect.adjusted(-0.5, -0.5, 0.5, 0.5))
         self._paint_badge(p, rect)
 
@@ -190,10 +192,10 @@ class PreviewCanvas(QWidget):
                          QRectF(src_rect.width() * (1 - frac), 0,
                                 src_rect.width() * frac, src_rect.height()))
 
-        p.setPen(QPen(QColor(theme.ACCENT), 1.5))
+        p.setPen(QPen(theme.accent(), 1.5))
         p.drawLine(QPointF(split_x, rect.top()), QPointF(split_x, rect.bottom()))
         handle_y = rect.center().y()
-        p.setBrush(QColor(theme.ACCENT))
+        p.setBrush(theme.accent())
         p.drawEllipse(QPointF(split_x, handle_y), 7, 7)
 
     def _paint_badge(self, p: QPainter, rect: QRectF) -> None:
@@ -202,7 +204,7 @@ class PreviewCanvas(QWidget):
         text = "Original (hold)" if self._peek else labels.get(self.mode, "")
         if not text:
             return
-        p.setPen(QColor(theme.TEXT_DIM))
+        p.setPen(theme.canvas_text_colour())
         f = QFont()
         f.setPointSize(9)
         p.setFont(f)

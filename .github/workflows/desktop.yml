@@ -92,9 +92,12 @@ jobs:
             libxcb-render-util0 libxcb-image0 \
             libwayland-client0 libwayland-cursor0 libwayland-egl1
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          # Ubuntu 22.04's flatpak-builder is too old for the 25.08 runtime.
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
       - name: Build .deb, .rpm, AppImage and Flatpak
         env:
           PYTHON: python
+          FLATPAK_BUILDER: flatpak run org.flatpak.Builder
         run: ./packaging/linux/build_linux.sh
       # Install each package the way a user would and run its self-test.
       - name: Test the .deb (Ubuntu)

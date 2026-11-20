@@ -4,12 +4,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, Slot
-from PySide6.QtGui import QAction, QDesktopServices, QKeySequence
+from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices,
+                           QKeySequence)
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout,
                                QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QMessageBox, QProgressBar,
-                               QPushButton, QScrollArea, QSizePolicy, QSlider,
+                               QPushButton, QRadioButton, QScrollArea,
+                               QSizePolicy, QSlider, QTabBar,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from .. import APP_NAME, __version__
@@ -18,6 +20,7 @@ from ..core.passes import ALL_PASSES
 from ..core.presets import DEFAULT_PRESET, PRESETS, PRESETS_BY_KEY, Settings
 from . import preview as preview_mod
 from . import theme
+from .theme import command as C
 from .preview import PreviewCanvas
 from .workers import BatchWorker, LoadWorker, PreviewWorker, ThreadKeeper
 
@@ -31,9 +34,14 @@ DISCLAIMER = (
 
 
 class MainWindow(QMainWindow):
+    VIEW_MODES = (("&Split", preview_mod.MODE_SPLIT),
+                  ("&Original", preview_mod.MODE_BEFORE),
+                  ("&Protected", preview_mod.MODE_AFTER),
+                  ("&Difference", preview_mod.MODE_DIFF))
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle(f"{APP_NAME} {__version__}")
+        self.setWindowTitle(theme.window_title(None, APP_NAME))
         self.resize(1360, 880)
         self.setAcceptDrops(True)
 
@@ -53,7 +61,10 @@ class MainWindow(QMainWindow):
         self._debounce.setInterval(PREVIEW_DEBOUNCE_MS)
         self._debounce.timeout.connect(self._render_preview)
 
+        self._last_metrics = None
         self._build_ui()
+        if theme.watcher is not None:
+            theme.watcher.changed.connect(self._on_scheme_changed)
         self._sync_controls_from_settings()
         self._update_actions()
 
@@ -76,52 +87,85 @@ class MainWindow(QMainWindow):
         root.addWidget(splitter, 1)
         root.addWidget(self._build_action_bar())
 
-        disclaimer = QLabel(DISCLAIMER)
-        disclaimer.setObjectName("Disclaimer")
+        rule = QFrame()
+        rule.setFrameShape(QFrame.HLine)
+        rule.setFrameShadow(QFrame.Sunken)
+        root.addWidget(rule)
+        disclaimer = theme.caption(QLabel(DISCLAIMER))
         disclaimer.setWordWrap(True)
+        disclaimer.setContentsMargins(0, 0, 0, 8)
         root.addWidget(disclaimer)
 
         self.setCentralWidget(central)
         self._build_menus()
 
     def _build_menus(self) -> None:
-        file_menu = self.menuBar().addMenu("&File")
-        add = QAction("&Add images...", self)
-        add.setShortcut(QKeySequence.Open)
-        add.triggered.connect(self.add_images)
-        file_menu.addAction(add)
+        bar = self.menuBar()
 
-        out = QAction("Choose &output folder...", self)
-        out.triggered.connect(self.choose_output)
-        file_menu.addAction(out)
+        def act(text, slot, shortcut=None, role=None):
+            a = QAction(C(text), self)
+            if shortcut is not None:
+                a.setShortcut(shortcut)
+            if role is not None:
+                a.setMenuRole(role)
+            a.triggered.connect(slot)
+            return a
+
+        file_menu = bar.addMenu(C("&File"))
+        file_menu.addAction(act("&Add images...", self.add_images, QKeySequence.Open))
+        file_menu.addAction(act("Choose &output folder...", self.choose_output))
         file_menu.addSeparator()
+        self.protect_action = act("&Protect and save", self.run_batch,
+                                  QKeySequence.Save)
+        file_menu.addAction(self.protect_action)
+        file_menu.addSeparator()
+        # macOS moves this into the application menu as "Quit Mistcoat".
+        quit_text = "E&xit" if theme.IS_WIN else "&Quit"
+        file_menu.addAction(act(quit_text, self.close,
+                                QKeySequence("Alt+F4") if theme.IS_WIN
+                                else QKeySequence.Quit, QAction.QuitRole))
 
-        quit_action = QAction("&Quit", self)
-        quit_action.setShortcut(QKeySequence.Quit)
-        quit_action.triggered.connect(self.close)
-        file_menu.addAction(quit_action)
+        view_menu = bar.addMenu(C("&View"))
+        self.view_actions = QActionGroup(self)
+        for i, (label, mode) in enumerate(self.VIEW_MODES):
+            a = act(label, lambda _c=False, m=mode: self._set_view_mode(m),
+                    QKeySequence(f"Ctrl+{i + 1}"))
+            a.setCheckable(True)
+            a.setChecked(mode == preview_mod.MODE_SPLIT)
+            a.setData(mode)
+            self.view_actions.addAction(a)
+            view_menu.addAction(a)
+        view_menu.addSeparator()
+        view_menu.addAction(act("Zoom to &fit", lambda: self.canvas.fit(),
+                                QKeySequence("Ctrl+9")))
+        view_menu.addAction(act("&Actual size", lambda: self.canvas.set_zoom(1.0),
+                                QKeySequence("Ctrl+0")))
 
-        help_menu = self.menuBar().addMenu("&Help")
-        about = QAction("What this actually does", self)
-        about.triggered.connect(self.show_about)
-        help_menu.addAction(about)
+        if theme.IS_MAC:
+            win_menu = bar.addMenu("Window")
+            win_menu.addAction(act("Minimize", self.showMinimized,
+                                   QKeySequence("Ctrl+M")))
+            win_menu.addAction(act("Zoom", lambda: self.showNormal()
+                                   if self.isMaximized() else self.showMaximized()))
+
+        help_menu = bar.addMenu(C("&Help"))
+        help_menu.addAction(act("&How Mistcoat works", self.show_about))
+        help_menu.addAction(act(f"&About {APP_NAME}", self.show_version,
+                                role=QAction.AboutRole))
 
     def _build_file_panel(self) -> QWidget:
-        panel = QFrame()
-        panel.setObjectName("Panel")
+        panel = QWidget()
         lay = QVBoxLayout(panel)
-        lay.setContentsMargins(10, 10, 10, 10)
+        lay.setContentsMargins(0, 0, 6, 0)
 
-        heading = QLabel("IMAGES")
-        heading.setObjectName("SectionHeading")
-        lay.addWidget(heading)
+        lay.addWidget(theme.heading(QLabel("Images")))
 
         self.file_list = QListWidget()
         self.file_list.currentRowChanged.connect(self._on_file_selected)
         lay.addWidget(self.file_list, 1)
 
         row = QHBoxLayout()
-        add_btn = QPushButton("Add images")
+        add_btn = QPushButton(C("Add images..."))
         add_btn.clicked.connect(self.add_images)
         remove_btn = QPushButton("Remove")
         remove_btn.clicked.connect(self.remove_selected)
@@ -129,41 +173,37 @@ class MainWindow(QMainWindow):
         row.addWidget(remove_btn)
         lay.addLayout(row)
 
-        self.file_hint = QLabel("You can also drop files or a folder here.")
-        self.file_hint.setObjectName("Subtle")
+        self.file_hint = theme.secondary(
+            QLabel("You can also drop files or a folder here."))
         self.file_hint.setWordWrap(True)
         lay.addWidget(self.file_hint)
         return panel
 
     def _build_preview_panel(self) -> QWidget:
-        panel = QFrame()
-        panel.setObjectName("Panel")
+        panel = QWidget()
         lay = QVBoxLayout(panel)
-        lay.setContentsMargins(10, 10, 10, 10)
+        lay.setContentsMargins(6, 0, 6, 0)
         lay.setSpacing(8)
 
         bar = QHBoxLayout()
-        self.mode_group = QButtonGroup(self)
-        for label, mode in (("Split", preview_mod.MODE_SPLIT),
-                            ("Original", preview_mod.MODE_BEFORE),
-                            ("Protected", preview_mod.MODE_AFTER),
-                            ("Difference", preview_mod.MODE_DIFF)):
-            btn = QPushButton(label)
-            btn.setCheckable(True)
-            btn.setObjectName("Preset")
-            btn.clicked.connect(lambda _c, m=mode: self.canvas.set_mode(m))
-            self.mode_group.addButton(btn)
-            bar.addWidget(btn)
-            if mode == preview_mod.MODE_SPLIT:
-                btn.setChecked(True)
+        # A tab bar is the closest native control to a segmented switch: on
+        # macOS it is drawn as one, on Windows and Linux as view tabs.
+        self.mode_tabs = QTabBar()
+        self.mode_tabs.setDocumentMode(True)
+        self.mode_tabs.setExpanding(False)
+        self.mode_tabs.setDrawBase(False)
+        for label, mode in self.VIEW_MODES:
+            self.mode_tabs.addTab(label.replace("&", ""))
+        self.mode_tabs.currentChanged.connect(
+            lambda i: self._set_view_mode(self.VIEW_MODES[i][1]))
+        bar.addWidget(self.mode_tabs)
         bar.addStretch(1)
 
-        fit_btn = QPushButton("Fit")
+        fit_btn = QPushButton(C("Fit"))
         fit_btn.clicked.connect(lambda: self.canvas.fit())
         full_btn = QPushButton("100%")
         full_btn.clicked.connect(lambda: self.canvas.set_zoom(1.0))
-        self.zoom_label = QLabel("--")
-        self.zoom_label.setObjectName("Subtle")
+        self.zoom_label = theme.secondary(QLabel("\u2013"))
         self.zoom_label.setMinimumWidth(52)
         self.zoom_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
         bar.addWidget(self.zoom_label)
@@ -176,17 +216,14 @@ class MainWindow(QMainWindow):
             lambda z: self.zoom_label.setText(f"{z * 100:.0f}%"))
         lay.addWidget(self.canvas, 1)
 
-        self.preview_note = QLabel(
+        self.preview_note = theme.caption(QLabel(
             "Preview is rendered at screen size. Hold Space to see the original; "
-            "drag the divider; scroll to zoom.")
-        self.preview_note.setObjectName("Subtle")
+            "drag the divider; scroll to zoom."))
         self.preview_note.setWordWrap(True)
         lay.addWidget(self.preview_note)
 
-        self.metrics_box = QFrame()
-        self.metrics_box.setObjectName("Panel")
+        self.metrics_box = QGroupBox("Preview figures")
         self.metrics_grid = QGridLayout(self.metrics_box)
-        self.metrics_grid.setContentsMargins(10, 8, 10, 8)
         self.metrics_grid.setHorizontalSpacing(18)
         self.metrics_grid.setVerticalSpacing(3)
         lay.addWidget(self.metrics_box)
@@ -196,33 +233,33 @@ class MainWindow(QMainWindow):
     def _build_controls_panel(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
         inner = QWidget()
         lay = QVBoxLayout(inner)
         lay.setContentsMargins(2, 0, 8, 0)
         lay.setSpacing(10)
 
         # --- presets
-        preset_box = QGroupBox("PROTECTION LEVEL")
+        preset_box = QGroupBox("Protection level")
         pv = QVBoxLayout(preset_box)
         self.preset_group = QButtonGroup(self)
-        self.preset_buttons: dict[str, QPushButton] = {}
+        # Not exclusive: custom settings must be able to clear every option.
+        self.preset_group.setExclusive(False)
+        self.preset_buttons: dict[str, QRadioButton] = {}
         for preset in PRESETS:
-            btn = QPushButton(preset.label)
-            btn.setObjectName("Preset")
-            btn.setCheckable(True)
+            btn = QRadioButton(preset.label)
             btn.setToolTip(preset.blurb)
             btn.clicked.connect(lambda _c, k=preset.key: self._apply_preset(k))
             self.preset_group.addButton(btn)
             self.preset_buttons[preset.key] = btn
             pv.addWidget(btn)
-        self.preset_blurb = QLabel()
-        self.preset_blurb.setObjectName("Subtle")
+        self.preset_blurb = theme.secondary(QLabel())
         self.preset_blurb.setWordWrap(True)
         pv.addWidget(self.preset_blurb)
         lay.addWidget(preset_box)
 
         # --- strength
-        strength_box = QGroupBox("STRENGTH")
+        strength_box = QGroupBox("Strength")
         sv = QVBoxLayout(strength_box)
         row = QHBoxLayout()
         self.strength_slider = QSlider(Qt.Horizontal)
@@ -234,15 +271,15 @@ class MainWindow(QMainWindow):
         row.addWidget(self.strength_slider, 1)
         row.addWidget(self.strength_value)
         sv.addLayout(row)
-        hint = QLabel("Higher means more protection and more visible change. "
-                      "The numbers under the preview tell you where you are.")
-        hint.setObjectName("Subtle")
+        hint = theme.secondary(QLabel(
+            "Higher means more protection and more visible change. "
+            "The numbers under the preview tell you where you are."))
         hint.setWordWrap(True)
         sv.addWidget(hint)
         lay.addWidget(strength_box)
 
         # --- passes
-        pass_box = QGroupBox("WHAT TO DISRUPT")
+        pass_box = QGroupBox("What to disrupt")
         pb = QVBoxLayout(pass_box)
         self.pass_checks: dict[str, QCheckBox] = {}
         for p in ALL_PASSES:
@@ -252,15 +289,14 @@ class MainWindow(QMainWindow):
             cb.toggled.connect(lambda on, n=p.name: self._on_pass_toggled(n, on))
             self.pass_checks[p.name] = cb
             pb.addWidget(cb)
-            sub = QLabel(p.targets)
-            sub.setObjectName("Subtle")
+            sub = theme.secondary(QLabel(p.targets))
             sub.setWordWrap(True)
-            sub.setContentsMargins(23, 0, 0, 4)
+            sub.setContentsMargins(theme.indicator_indent(cb), 0, 0, 4)
             pb.addWidget(sub)
         lay.addWidget(pass_box)
 
         # --- durability
-        dur_box = QGroupBox("DURABILITY")
+        dur_box = QGroupBox("Durability")
         dv = QVBoxLayout(dur_box)
         self.harden_check = QCheckBox("Harden against re-compression")
         self.harden_check.setToolTip(
@@ -269,15 +305,16 @@ class MainWindow(QMainWindow):
             "Costs a few seconds per image. Strongly recommended.")
         self.harden_check.toggled.connect(self._on_harden)
         dv.addWidget(self.harden_check)
-        note = QLabel("Without this, a platform's own re-encode strips much of "
-                      "the protection on upload.")
-        note.setObjectName("Subtle")
+        note = theme.secondary(QLabel(
+            "Without this, a platform's own re-encode strips much of "
+            "the protection on upload."))
+        note.setContentsMargins(theme.indicator_indent(self.harden_check), 0, 0, 0)
         note.setWordWrap(True)
         dv.addWidget(note)
         lay.addWidget(dur_box)
 
         # --- metadata
-        meta_box = QGroupBox("CREDIT AND OPT-OUT")
+        meta_box = QGroupBox("Credit and opt-out")
         mv = QVBoxLayout(meta_box)
         self.optout_check = QCheckBox("Embed 'do not train' metadata")
         self.optout_check.setToolTip(
@@ -299,13 +336,13 @@ class MainWindow(QMainWindow):
         lay.addWidget(meta_box)
 
         # --- output
-        out_box = QGroupBox("OUTPUT")
+        out_box = QGroupBox("Output")
         ov = QVBoxLayout(out_box)
-        self.out_label = QLabel("Alongside the originals, in 'Protected'")
-        self.out_label.setObjectName("Subtle")
+        self.out_label = theme.secondary(
+            QLabel("Alongside the originals, in \u201cProtected\u201d"))
         self.out_label.setWordWrap(True)
         ov.addWidget(self.out_label)
-        out_btn = QPushButton("Choose output folder...")
+        out_btn = QPushButton(C("Choose output folder..."))
         out_btn.clicked.connect(self.choose_output)
         ov.addWidget(out_btn)
 
@@ -328,8 +365,7 @@ class MainWindow(QMainWindow):
         q_row.addWidget(self.quality_spin, 1)
         ov.addLayout(q_row)
 
-        self.format_warning = QLabel()
-        self.format_warning.setObjectName("Subtle")
+        self.format_warning = theme.secondary(QLabel())
         self.format_warning.setWordWrap(True)
         ov.addWidget(self.format_warning)
         lay.addWidget(out_box)
@@ -345,8 +381,7 @@ class MainWindow(QMainWindow):
         lay = QHBoxLayout(bar)
         lay.setContentsMargins(0, 0, 0, 0)
 
-        self.status = QLabel("Add an image to begin.")
-        self.status.setObjectName("Subtle")
+        self.status = theme.secondary(QLabel("Add an image to begin."))
         lay.addWidget(self.status, 1)
 
         self.progress = QProgressBar()
@@ -356,13 +391,14 @@ class MainWindow(QMainWindow):
         self.progress.hide()
         lay.addWidget(self.progress)
 
-        self.cancel_btn = QPushButton("Cancel")
+        self.cancel_btn = QPushButton(C("Cancel"))
         self.cancel_btn.clicked.connect(self._cancel_batch)
         self.cancel_btn.hide()
         lay.addWidget(self.cancel_btn)
 
-        self.protect_btn = QPushButton("Protect and save")
-        self.protect_btn.setObjectName("Primary")
+        self.protect_btn = QPushButton(C("Protect and save"))
+        theme.primary(self.protect_btn)
+        self.protect_btn.setMinimumWidth(170)
         self.protect_btn.clicked.connect(self.run_batch)
         lay.addWidget(self.protect_btn)
         return bar
@@ -492,10 +528,16 @@ class MainWindow(QMainWindow):
 
     def _on_file_selected(self, row: int) -> None:
         if row < 0 or row >= len(self.paths):
+            self.setWindowTitle(theme.window_title(None, APP_NAME))
+            self.setWindowFilePath("")
             return
+        path = self.paths[row]
+        self.setWindowTitle(theme.window_title(path.name, APP_NAME))
+        if theme.IS_MAC:
+            self.setWindowFilePath(str(path))   # document icon in the title bar
         self._token += 1
         token = self._token
-        self.canvas.set_placeholder("Loading...")
+        self.canvas.set_placeholder("Loading…")
         self.canvas.set_images(None, None)
         worker = LoadWorker(token, self.paths[row], self)
         worker.loaded.connect(self._on_loaded)
@@ -548,14 +590,15 @@ class MainWindow(QMainWindow):
         self._set_metrics(metrics)
 
     def _set_metrics(self, metrics) -> None:
+        self._last_metrics = metrics
         while self.metrics_grid.count():
             item = self.metrics_grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         if metrics is None:
-            label = QLabel("Quality and durability figures appear here once a "
-                           "preview has been rendered.")
-            label.setObjectName("Subtle")
+            label = theme.secondary(QLabel(
+                "Quality and durability figures appear here once a "
+                "preview has been rendered."))
             label.setWordWrap(True)
             self.metrics_grid.addWidget(label, 0, 0, 1, 4)
             return
@@ -563,22 +606,21 @@ class MainWindow(QMainWindow):
         for i, (name, value) in enumerate(rows):
             col = (i % 2) * 2
             row = i // 2
-            key = QLabel(name)
-            key.setObjectName("Subtle")
+            key = theme.secondary(QLabel(name))
             val = QLabel(value)
             if name == "Visible change":
                 good = metrics.psnr >= 36
-                val.setStyleSheet(f"color: {theme.GOOD if good else theme.WARN};")
+                theme.tint(val, theme.status_colour(good))
             if name == "Durability":
                 good = metrics.survival >= 0.5
-                val.setStyleSheet(f"color: {theme.GOOD if good else theme.WARN};")
+                theme.tint(val, theme.status_colour(good))
             self.metrics_grid.addWidget(key, row, col)
             self.metrics_grid.addWidget(val, row, col + 1)
         note = QLabel("Durability is measured against re-encodes the hardening never saw "
                       "(JPEG q85/q60, WebP, downscaling). Figures are from the "
                       "preview-sized copy; the saved file is "
                       "processed at full resolution with hardening applied.")
-        note.setObjectName("Subtle")
+        theme.caption(note)
         note.setWordWrap(True)
         self.metrics_grid.addWidget(note, len(rows) // 2 + 1, 0, 1, 4)
 
@@ -665,7 +707,9 @@ class MainWindow(QMainWindow):
                 f"Saved to {out_dir}\n\n"
                 f"Lowest durability in this batch: {worst * 100:.0f}%.\n\n"
                 "Keep your originals. Upload only the protected copies.")
-            open_btn = box.addButton("Open folder", QMessageBox.ActionRole)
+            box.setIcon(QMessageBox.Information)
+            open_btn = box.addButton(theme.file_manager_action(),
+                                     QMessageBox.ActionRole)
             box.addButton(QMessageBox.Close)
             box.exec()
             if box.clickedButton() is open_btn:
@@ -681,10 +725,11 @@ class MainWindow(QMainWindow):
     def _update_actions(self) -> None:
         busy = self._batch is not None
         self.protect_btn.setEnabled(bool(self.paths) and not busy)
+        self.protect_action.setEnabled(bool(self.paths) and not busy)
         self.protect_btn.setText(
-            "Protecting..." if busy else
-            f"Protect and save ({len(self.paths)})" if len(self.paths) > 1 else
-            "Protect and save")
+            C("Protecting...") if busy else
+            C(f"Protect and save ({len(self.paths)})") if len(self.paths) > 1 else
+            C("Protect and save"))
 
     # ------------------------------------------------------- window events
 
@@ -699,9 +744,33 @@ class MainWindow(QMainWindow):
             self._add_paths(paths)
             event.acceptProposedAction()
 
+    def _set_view_mode(self, mode: str) -> None:
+        """Keep the tab bar, the View menu and the canvas in step."""
+        index = [m for _l, m in self.VIEW_MODES].index(mode)
+        if self.mode_tabs.currentIndex() != index:
+            self.mode_tabs.blockSignals(True)
+            self.mode_tabs.setCurrentIndex(index)
+            self.mode_tabs.blockSignals(False)
+        for a in self.view_actions.actions():
+            a.setChecked(a.data() == mode)
+        self.canvas.set_mode(mode)
+
+    def _on_scheme_changed(self) -> None:
+        """System light/dark switch: repaint what we colour ourselves."""
+        self._set_metrics(self._last_metrics)
+        theme.primary(self.protect_btn)
+        self.canvas.update()
+
+    def show_version(self) -> None:
+        QMessageBox.about(
+            self, f"About {APP_NAME}",
+            f"<b>{APP_NAME} {__version__}</b>"
+            "<p>Protects artwork from AI training and style mimicry. "
+            "Everything runs on this computer; no image is uploaded.</p>")
+
     def show_about(self) -> None:
         QMessageBox.information(
-            self, f"About {APP_NAME}",
+            self, C(f"How {APP_NAME} works"),
             "<b>What Mistcoat does</b>"
             "<p>It makes small, mostly invisible changes to an image that "
             "degrade its value as AI training data: it disrupts the fine "

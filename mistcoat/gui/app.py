@@ -4,7 +4,6 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import QEvent, Qt
-from PySide6.QtGui import QPalette, QColor
 from PySide6.QtWidgets import QApplication
 
 from .. import APP_NAME
@@ -61,6 +60,7 @@ def _selftest(report_path: str) -> int:
         Image.fromarray(art).save(src)
         result = pipeline.protect_file(src, tmp / "out",
                                        PRESETS_BY_KEY["balanced"].to_settings())
+        theme.apply(app)
         window = MainWindow()          # builds every widget, no show()
         window.close()
         report.update(ok=result.saved_to.exists(),
@@ -104,16 +104,7 @@ def run(argv: list[str] | None = None) -> int:
     if icon is not None:
         from PySide6.QtGui import QIcon
         app.setWindowIcon(QIcon(str(icon)))
-    app.setStyle("Fusion")
-
-    palette = app.palette()
-    palette.setColor(QPalette.Window, QColor(theme.BG))
-    palette.setColor(QPalette.Base, QColor(theme.CANVAS))
-    palette.setColor(QPalette.Text, QColor(theme.TEXT))
-    palette.setColor(QPalette.WindowText, QColor(theme.TEXT))
-    palette.setColor(QPalette.Highlight, QColor(theme.ACCENT_DIM))
-    app.setPalette(palette)
-    app.setStyleSheet(theme.STYLESHEET)
+    theme.apply(app)       # native style, follows system light/dark
 
     window = MainWindow()
     app.window = window

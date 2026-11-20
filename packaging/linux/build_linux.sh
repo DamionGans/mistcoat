@@ -3,8 +3,12 @@
 #
 #   ./packaging/linux/build_linux.sh
 #
-# Needs Python 3.11+, curl, and for the Flatpak: flatpak + flatpak-builder with
-# the Flathub remote. Set SKIP_FLATPAK=1 to leave that one out. Outputs land in
+# Needs Python 3.11+, curl, and for the Flatpak: flatpak with the Flathub remote
+# and a current flatpak-builder. Distro packages of flatpak-builder older than
+# 1.4 cannot build for the 25.08 runtime; the Flathub build works everywhere:
+#   flatpak install --user flathub org.flatpak.Builder
+#   FLATPAK_BUILDER="flatpak run org.flatpak.Builder" ./packaging/linux/build_linux.sh
+# Set SKIP_FLATPAK=1 to leave that one out. Outputs land in
 # dist/:
 #   mistcoat_<ver>_<amd64|arm64>.deb
 #   mistcoat-<ver>-1.<x86_64|aarch64>.rpm
@@ -109,7 +113,7 @@ if [ "${SKIP_FLATPAK:-0}" != "1" ]; then
   mkdir -p "$SRC"
   cp -a dist/Mistcoat "$SRC/mistcoat"
   cp -a "$SHARE" "$SRC/share"
-  flatpak-builder --user --force-clean --install-deps-from=flathub \
+  ${FLATPAK_BUILDER:-flatpak-builder} --user --force-clean --install-deps-from=flathub \
     --repo=build/flatpak-repo build/flatpak-build packaging/linux/$APP_ID.yml
   FLATPAK="dist/Mistcoat-${VERSION}-linux-${ARCH}.flatpak"
   flatpak build-bundle build/flatpak-repo "$FLATPAK" "$APP_ID" \
