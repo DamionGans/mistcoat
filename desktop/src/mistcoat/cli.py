@@ -67,8 +67,10 @@ def cmd_protect(args) -> int:
         return 1
     settings = _settings_from_args(args)
     out_dir = Path(args.output)
+    from .core import accel
     print(f"{len(files)} image(s) -> {out_dir}  "
-          f"[preset {args.preset}, strength {settings.strength * 100:.0f}%]")
+          f"[preset {args.preset}, strength {settings.strength * 100:.0f}%, "
+          f"{accel.status()['using']}]")
 
     failures = 0
     for i, path in enumerate(files, 1):
@@ -122,6 +124,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="mistcoat", description="Protect artwork against AI training.")
     ap.add_argument("--version", action="version", version=f"Mistcoat {__version__}")
+    gpu = ap.add_mutually_exclusive_group()
+    gpu.add_argument("--gpu", dest="gpu", action="store_true", default=None,
+                     help="use the graphics card when one is available (default)")
+    gpu.add_argument("--no-gpu", dest="gpu", action="store_false",
+                     help="run everything on the processor")
     sub = ap.add_subparsers(dest="command", required=True)
 
     def common(p):
@@ -157,6 +164,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.gpu is not None:
+        from .core import accel
+        accel.set_gpu_enabled(args.gpu)
     return args.func(args)
 
 

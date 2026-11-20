@@ -252,3 +252,44 @@ def test_durability_not_saturated(settings):
                       .metrics.survival, 3) for s in (0.3, 0.6, 1.0)}
     assert len(readings) > 1
     assert max(readings) < 0.999
+
+
+# ------------------------------------------------------------ acceleration
+
+def _reference_blur(a, sigma):
+    """The original single-threaded, interleaved implementation."""
+    radius = max(1, int(round(sigma * 0.886)))
+    out = a.astype(np.float32)
+    for _ in range(3):
+        out = imaging._box_blur_1d(out, radius, 0)
+        out = imaging._box_blur_1d(out, radius, 1)
+    return out
+
+
+@pytest.mark.parametrize("shape", [(300, 400), (301, 517, 3), (7, 900)])
+@pytest.mark.parametrize("sigma", [1.5, 9.0, 60.0])
+def test_cpu_blur_matches_reference(monkeypatch, shape, sigma):
+    from mistcoat.core import accel
+    monkeypatch.setattr(accel, "_enabled", False)
+    a = np.random.default_rng(1).standard_normal(shape).astype(np.float32)
+    np.testing.assert_allclose(imaging.blur(a, sigma), _reference_blur(a, sigma), atol=2e-6)
+
+
+def test_gpu_blur_matches_cpu_when_available(monkeypatch):
+    from mistcoat.core import accel
+    if not accel.gpu_active():
+        pytest.skip(accel.status()["gpu_reason"] or "GPU switched off")
+    a = np.random.default_rng(2).standard_normal((600, 800, 3)).astype(np.float32)
+    for sigma in (1.5, 9.0, 60.0):
+        gpu = imaging.blur(a, sigma)
+        monkeypatch.setattr(accel, "_enabled", False)
+        cpu = imaging.blur(a, sigma)
+        monkeypatch.setattr(accel, "_enabled", True)
+        np.testing.assert_allclose(gpu, cpu, atol=2e-6)
+
+
+def test_gpu_off_switch(monkeypatch):
+    from mistcoat.core import accel
+    monkeypatch.setattr(accel, "_enabled", False)
+    assert not accel.gpu_active()
+    assert accel.status()["using"].startswith("CPU")

@@ -11,6 +11,7 @@ dependencies = [
     "numpy>=2.0",
     "pillow>=11.0",
     "PySide6>=6.7",   # 6.7 adds the Windows 11 style
+    "wgpu>=0.32,<0.34",   # GPU acceleration (WebGPU); falls back to the CPU
 ]
 
 [project.optional-dependencies]

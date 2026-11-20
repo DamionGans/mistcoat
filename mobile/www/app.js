@@ -260,6 +260,12 @@ function setupControls() {
   });
   $("harden").addEventListener("change", (ev) => { state.settings.harden = ev.target.checked; changed(false); });
   $("optout").addEventListener("change", (ev) => { state.settings.writeOptout = ev.target.checked; saveSettings(); });
+  $("gpu").addEventListener("change", (ev) => {
+    state.settings.useGpu = ev.target.checked;
+    saveSettings();
+    refreshGpuStatus();
+  });
+  refreshGpuStatus();
   $("credit").addEventListener("input", (ev) => { state.settings.credit = ev.target.value; saveSettings(); });
   $("copyright").addEventListener("input", (ev) => { state.settings.copyright = ev.target.value; saveSettings(); });
   $("format").addEventListener("change", (ev) => { state.settings.outputFormat = ev.target.value; saveSettings(); });
@@ -270,6 +276,22 @@ function setupControls() {
     if (i >= 0) select(i);
   });
   syncControls();
+}
+
+// Which processor does the work. Probing happens in the worker, where the
+// engine runs; the answer only changes if the GPU is lost.
+async function refreshGpuStatus() {
+  try {
+    const { status } = await call({ type: "gpu-status", settings: state.settings });
+    const el = $("gpu-status");
+    if (status.available) {
+      el.textContent = status.enabled ? `Faster processing on ${status.name}.`
+        : "Off: using the processor.";
+    } else {
+      el.textContent = `${status.reason}; using the processor.`;
+      $("gpu").disabled = true;
+    }
+  } catch { /* status is informational only */ }
 }
 
 function changed(refresh = true) {
@@ -289,6 +311,7 @@ function syncControls() {
   for (const cb of $("passes").querySelectorAll("input")) cb.checked = !!s.enabled[cb.dataset.pass];
   $("harden").checked = s.harden;
   $("optout").checked = s.writeOptout;
+  $("gpu").checked = s.useGpu !== false;
   $("credit").value = s.credit;
   $("copyright").value = s.copyright;
   $("format").value = s.outputFormat;

@@ -57,7 +57,7 @@ def _selftest(report_path: str) -> int:
         if not os.environ.get("QT_QPA_PLATFORM"):
             args += ["-platform", "offscreen"]
         app = _QA.instance() or _QA(args)
-        from ..core import pipeline
+        from ..core import accel, pipeline
         from ..core.presets import PRESETS_BY_KEY
 
         tmp = Path(tempfile.mkdtemp(prefix="mistcoat-selftest-"))
@@ -75,7 +75,8 @@ def _selftest(report_path: str) -> int:
                       psnr=round(result.metrics.psnr, 2),
                       durability=round(result.metrics.survival, 3),
                       seconds=round(result.seconds, 2),
-                      qt_platform=app.platformName())
+                      qt_platform=app.platformName(),
+                      compute=accel.status()["using"])
         del app
     except Exception:  # noqa: BLE001
         report["error"] = traceback.format_exc()
@@ -112,6 +113,12 @@ def run(argv: list[str] | None = None) -> int:
         from PySide6.QtGui import QIcon
         app.setWindowIcon(QIcon(str(icon)))
     theme.apply(app)       # native style, follows system light/dark
+
+    # The GPU preference, remembered between sessions (on unless switched off).
+    from PySide6.QtCore import QSettings
+    from ..core import accel
+    stored = QSettings().value("performance/use_gpu", True)
+    accel.set_gpu_enabled(accel.gpu_enabled() and str(stored).lower() not in ("false", "0"))
 
     window = MainWindow()
     app.window = window

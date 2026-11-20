@@ -103,7 +103,7 @@ async function harden(original, prot, w, h, settings, ceiling, codec, base, prog
 export async function protect(rgb, w, h, settings, { codec = null, progress = noop, doMeasure = true } = {}) {
   const t0 = Date.now();
   const original = rgb;
-  const ctx = new PassContext(original, w, h, settings.seed);
+  const ctx = await new PassContext(original, w, h, settings.seed).prepare();
   const active = ALL_PASSES.filter((p) => passStrength(settings, p.name) > 0);
   if (!active.length) {
     return { rgb: Float32Array.from(original), metrics: null, applied: [], seconds: 0,
@@ -116,7 +116,7 @@ export async function protect(rgb, w, h, settings, { codec = null, progress = no
   for (let i = 0; i < active.length; i++) {
     const p = active[i];
     progress(`Applying ${p.label.toLowerCase()}`, (0.55 * i) / active.length);
-    current = p.apply(ctx, current, passStrength(settings, p.name));
+    current = await p.apply(ctx, current, passStrength(settings, p.name));
     if (p.geometric) {
       current = limit(original, current, ceiling);
       geometricDone = Float32Array.from(current);

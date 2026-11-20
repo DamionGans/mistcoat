@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import QSettings, Qt, QTimer, Slot
 from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices,
                            QKeySequence)
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog,
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from .. import APP_NAME, __version__
-from ..core import imaging
+from ..core import accel, imaging
 from ..core.passes import ALL_PASSES
 from ..core.presets import DEFAULT_PRESET, PRESETS, PRESETS_BY_KEY, Settings
 from . import preview as preview_mod
@@ -370,6 +370,25 @@ class MainWindow(QMainWindow):
         ov.addWidget(self.format_warning)
         lay.addWidget(out_box)
 
+        # --- performance
+        perf_box = QGroupBox("Performance")
+        fv = QVBoxLayout(perf_box)
+        self.gpu_check = QCheckBox("Use the graphics card (GPU)")
+        self.gpu_check.setToolTip(
+            "Runs the heaviest calculations on the graphics card, typically "
+            "2-3x faster overall on large images. Protection is equally "
+            "strong either way. Turn it off if the graphics driver misbehaves.")
+        self.gpu_check.setChecked(accel.gpu_enabled())
+        self.gpu_check.toggled.connect(self._on_gpu_toggled)
+        fv.addWidget(self.gpu_check)
+        self.gpu_status = theme.secondary(QLabel("Checking for a graphics card\u2026"))
+        self.gpu_status.setWordWrap(True)
+        self.gpu_status.setContentsMargins(theme.indicator_indent(self.gpu_check), 0, 0, 0)
+        fv.addWidget(self.gpu_status)
+        lay.addWidget(perf_box)
+        # Probing the GPU takes a moment; do it once the window is up.
+        QTimer.singleShot(0, self._refresh_gpu_status)
+
         lay.addStretch(1)
         scroll.setWidget(inner)
         scroll.setMinimumWidth(330)
@@ -467,6 +486,23 @@ class MainWindow(QMainWindow):
 
     def _on_optout(self, on: bool) -> None:
         self.settings.write_optout_metadata = on
+
+    def _on_gpu_toggled(self, on: bool) -> None:
+        accel.set_gpu_enabled(on)
+        QSettings().setValue("performance/use_gpu", on)
+        self._refresh_gpu_status()
+
+    def _refresh_gpu_status(self) -> None:
+        st = accel.status()
+        if st["gpu_available"]:
+            text = (f"Using {st['gpu_name']}." if st["gpu_enabled"] else
+                    f"Available: {st['gpu_name']}. Using the processor "
+                    f"({accel.cpu_workers()} threads).")
+        else:
+            text = (f"{st['gpu_reason']}. Using the processor "
+                    f"({accel.cpu_workers()} threads).")
+            self.gpu_check.setEnabled(False)
+        self.gpu_status.setText(text)
 
     def _on_format(self, _index: int) -> None:
         key = self.format_combo.currentData()

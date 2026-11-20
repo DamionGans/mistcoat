@@ -187,6 +187,24 @@ target on every push (see `.github/workflows/`).
 See [docs/RELEASING.md](docs/RELEASING.md) for code signing, notarisation and
 app-store submission.
 
+## Speed and GPU acceleration
+
+The heaviest step (the blurs behind the visibility mask, the noise fields and
+the quality check) runs on the graphics card when there is one, through
+WebGPU: Direct3D 12 or Vulkan on Windows, Metal on macOS, Vulkan on Linux,
+and the browser's WebGPU on phones (Android 12+, iOS 26+). Without a usable
+GPU it runs on all processor cores instead. The JPEG/WebP re-encoding checks
+always run on the processor, in parallel.
+
+Measured on a 12 MP image (desktop, GTX 1050 Ti / 4-core i5): **113 s before,
+62 s on the processor alone, 39 s with the GPU**. Phones and the browser
+gain about 30% with the GPU.
+
+It is on by default and can be switched off under *Performance* (desktop),
+*Advanced* (phone), with `--no-gpu` on the command line, or with
+`MISTCOAT_GPU=0`. Protection is equally strong either way: same visible
+change, same durability.
+
 ## Limits
 
 - Not a guarantee (see above). A model-guided attack, which pushes an image's

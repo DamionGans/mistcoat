@@ -1,9 +1,9 @@
 // Offline support: cache the app shell so Mistcoat works with no connection.
 // Bump VERSION whenever any cached file changes.
-const VERSION = "mistcoat-v0.1.0-ui3";
+const VERSION = "mistcoat-v0.1.0-gpu1";
 const SHELL = [
   "./", "index.html", "platform.js", "styles.css", "platform.css", "app.js", "worker.js", "manifest.webmanifest",
-  "engine/imaging.js", "engine/passes.js", "engine/presets.js", "engine/quality.js",
+  "engine/imaging.js", "engine/gpu.js", "engine/passes.js", "engine/presets.js", "engine/quality.js",
   "engine/pipeline.js", "engine/metadata.js",
   "icon-192.png", "icon-512.png", "icon-maskable-512.png",
 ];

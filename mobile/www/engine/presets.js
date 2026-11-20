@@ -14,6 +14,7 @@ export function defaultSettings() {
     copyright: "",
     outputFormat: "png", // "png" | "jpeg"
     jpegQuality: 0.95,
+    useGpu: true,        // a device preference; never changes the result's strength
   };
 }
 

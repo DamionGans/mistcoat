@@ -3,6 +3,7 @@
 import { fromRGBA, resizeLongest, toRGBA } from "./engine/imaging.js";
 import { buildXmp, injectJpegXmp, injectPngXmp } from "./engine/metadata.js";
 import { preview, protect } from "./engine/pipeline.js";
+import { gpuStatus, setGpuEnabled } from "./engine/gpu.js";
 
 // ----------------------------------------------------------- browser codec
 
@@ -117,10 +118,13 @@ async function encodeOutput(rgb, alpha, w, h, settings) {
 let current = null; // { rgb, w, h, small }
 
 self.onmessage = async (e) => {
+  if (e.data?.settings) setGpuEnabled(e.data.settings.useGpu !== false);
   const msg = e.data;
   const reply = (payload, transfer = []) => self.postMessage({ id: msg.id, ...payload }, transfer);
   try {
-    if (msg.type === "load") {
+    if (msg.type === "gpu-status") {
+      reply({ type: "gpu-status", status: await gpuStatus() });
+    } else if (msg.type === "load") {
       const img = await loadFile(msg.file, msg.maxPixels);
       current = { ...img, small: resizeLongest(img.rgb, img.w, img.h, 1100) };
       reply({ type: "loaded", w: img.w, h: img.h, ow: img.ow, oh: img.oh, note: img.note });

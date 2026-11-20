@@ -4,7 +4,7 @@
 // measured cost, not bit for bit.
 
 import {
-  blur, clamp01, clip, dct8, idct8, JPEG_Q50_LUMA, localActivity, luminance,
+  blurFast, clamp01, clip, dct8, idct8, JPEG_Q50_LUMA, localActivity, luminance,
   percentile, rgbToYcc, std, warp, yccToRgb,
 } from "./imaging.js";
 
@@ -54,8 +54,13 @@ export class PassContext {
     this._activity = null;
     this._lum = null;
   }
+  /** Compute the (blur-heavy) activity map up front, on the GPU if possible. */
+  async prepare() {
+    if (!this._activity) this._activity = await localActivity(this.rgb, this.w, this.h, 2.0);
+    return this;
+  }
   get activity() {
-    if (!this._activity) this._activity = localActivity(this.rgb, this.w, this.h, 2.0);
+    if (!this._activity) throw new Error("PassContext.prepare() must be awaited first");
     return this._activity;
   }
   get lum() {
@@ -80,18 +85,18 @@ export class PassContext {
 }
 
 /** Noise with energy between two blur scales (difference of gaussians). */
-export function bandNoise(w, h, rng, inner, outer) {
+export async function bandNoise(w, h, rng, inner, outer) {
   const n = rng.normals(w * h);
-  const lo = blur(n, w, h, inner);
-  const hi = blur(n, w, h, outer);
+  const lo = await blurFast(n, w, h, inner);
+  const hi = await blurFast(n, w, h, outer);
   for (let i = 0; i < lo.length; i++) lo[i] -= hi[i];
   const s = std(lo);
   if (s > 1e-8) for (let i = 0; i < lo.length; i++) lo[i] /= s;
   return lo;
 }
 
-function normField(w, h, rng, sigma) {
-  const f = blur(rng.normals(w * h), w, h, sigma);
+async function normField(w, h, rng, sigma) {
+  const f = await blurFast(rng.normals(w * h), w, h, sigma);
   const s = std(f);
   if (s > 1e-8) for (let i = 0; i < f.length; i++) f[i] /= s;
   return f;
@@ -115,7 +120,7 @@ export const TextureWarp = {
   defaultOn: true,
   geometric: true,
   salt: 37,
-  apply(ctx, rgb, strength) {
+  async apply(ctx, rgb, strength) {
     if (strength <= 0) return rgb;
     const { w, h } = ctx;
     const rng = ctx.rng(this.salt);
@@ -125,7 +130,7 @@ export const TextureWarp = {
     const norm = octaves.reduce((s, o) => s + o[1], 0);
     const dx = new Float32Array(w * h), dy = new Float32Array(w * h);
     for (const [sigma, weight] of octaves) {
-      const fx = normField(w, h, rng, sigma), fy = normField(w, h, rng, sigma);
+      const fx = await normField(w, h, rng, sigma), fy = await normField(w, h, rng, sigma);
       for (let i = 0; i < dx.length; i++) {
         dx[i] += fx[i] * (weight / norm);
         dy[i] += fy[i] * (weight / norm);
@@ -153,7 +158,7 @@ export const GhostContours = {
   defaultOn: false,
   geometric: false,
   salt: 71,
-  apply(ctx, rgb, strength) {
+  async apply(ctx, rgb, strength) {
     if (strength <= 0) return rgb;
     const { w, h } = ctx;
     const rng = ctx.rng(this.salt);
@@ -161,10 +166,10 @@ export const GhostContours = {
     const field = new Float32Array(w * h);
     for (const [frac, weight, freq] of [[0.045, 1.0, 7.0], [0.018, 0.55, 15.0]]) {
       const sigma = Math.max(1.5, span * frac);
-      const n = normField(w, h, rng, sigma);
+      const n = await normField(w, h, rng, sigma);
       const bands = new Float32Array(n.length);
       for (let i = 0; i < n.length; i++) bands[i] = Math.sin(n[i] * freq);
-      const soft = blur(bands, w, h, Math.max(1.5, sigma * 0.08));
+      const soft = await blurFast(bands, w, h, Math.max(1.5, sigma * 0.08));
       for (let i = 0; i < n.length; i++) field[i] += (bands[i] - soft[i]) * weight;
     }
     const s = std(field);
@@ -210,7 +215,7 @@ export const DctPoison = {
   defaultOn: true,
   geometric: false,
   salt: 23,
-  apply(ctx, rgb, strength) {
+  async apply(ctx, rgb, strength) {
     if (strength <= 0) return rgb;
     const { w, h } = ctx;
     const rng = ctx.rng(this.salt);
@@ -281,7 +286,7 @@ export const ChromaPerturb = {
   defaultOn: true,
   geometric: false,
   salt: 53,
-  apply(ctx, rgb, strength) {
+  async apply(ctx, rgb, strength) {
     if (strength <= 0) return rgb;
     const { w, h } = ctx;
     const rng = ctx.rng(this.salt);
@@ -297,7 +302,7 @@ export const ChromaPerturb = {
     }
     // Band starts at ~3px so 4:2:0 chroma subsampling does not erase it.
     for (const c of [1, 2]) {
-      const field = bandNoise(w, h, rng, 3.2, 10.0);
+      const field = await bandNoise(w, h, rng, 3.2, 10.0);
       for (let i = 0; i < n; i++) ycc[i * 3 + c] += field[i] * amp * gate[i];
     }
     return clipRgb(yccToRgb(ycc));
@@ -315,7 +320,7 @@ export const HighFrequencyNoise = {
   defaultOn: true,
   geometric: false,
   salt: 11,
-  apply(ctx, rgb, strength) {
+  async apply(ctx, rgb, strength) {
     if (strength <= 0) return rgb;
     const { w, h } = ctx;
     const rng = ctx.rng(this.salt);
@@ -326,12 +331,12 @@ export const HighFrequencyNoise = {
     const norm = bands.reduce((s, b) => s + b[2], 0);
     const total = new Float32Array(n);
     for (const [inner, outer, weight] of bands) {
-      const b = bandNoise(w, h, rng, inner, outer);
+      const b = await bandNoise(w, h, rng, inner, outer);
       for (let i = 0; i < n; i++) total[i] += b[i] * (weight / norm);
     }
     const out = Float32Array.from(rgb);
     for (let c = 0; c < 3; c++) {
-      const jitter = bandNoise(w, h, rng, 1.0, 3.0);
+      const jitter = await bandNoise(w, h, rng, 1.0, 3.0);
       for (let i = 0; i < n; i++) {
         out[i * 3 + c] += (total[i] + jitter[i] * 0.35) * amp * mask[i];
       }

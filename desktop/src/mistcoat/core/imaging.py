@@ -120,11 +120,11 @@ def blur(a: np.ndarray, sigma: float) -> np.ndarray:
     if sigma <= 0.01:
         return a.astype(np.float32, copy=True)
     radius = max(1, int(round(sigma * 0.886)))
-    out = a.astype(np.float32)
-    for _ in range(3):
-        out = _box_blur_1d(out, radius, 0)
-        out = _box_blur_1d(out, radius, 1)
-    return out
+    # Box passes along different axes commute, so all three vertical passes
+    # then all three horizontal ones equal the interleaved order. accel runs
+    # them on the GPU or across CPU cores.
+    from . import accel
+    return accel.box_blur3(a, radius, _box_blur_1d)
 
 
 def luminance(rgb: np.ndarray) -> np.ndarray:

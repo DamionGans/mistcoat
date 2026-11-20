@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import imaging, output, quality
+from . import accel, imaging, output, quality
 from .imaging import LoadedImage
 from .passes import ALL_PASSES, PassContext
 from .presets import Settings
@@ -84,7 +84,8 @@ def _harden(original: np.ndarray, protected: np.ndarray, settings: Settings,
     if target_rms < 1e-9:
         return protected
     transforms = [fn for _name, fn in imaging.TRAINING_TRANSFORMS]
-    base_decoded = [fn(base) for fn in transforms]
+    # The round trips are independent; accel runs them on several cores.
+    base_decoded = accel.run_parallel([lambda fn=fn: fn(base) for fn in transforms])
 
     r_norm = float(np.sqrt(np.sum(reference * reference)))
 
@@ -95,13 +96,14 @@ def _harden(original: np.ndarray, protected: np.ndarray, settings: Settings,
         d_norm = float(np.sqrt(np.sum(delta * delta)))
         if d_norm < 1e-9:
             return 0.0
-        decoded = decoded or [fn(candidate) for fn in transforms]
+        decoded = decoded or accel.run_parallel(
+            [lambda fn=fn: fn(candidate) for fn in transforms])
         vals = [float(np.sum((dec - bd) * delta)) / (d_norm * r_norm)
                 for dec, bd in zip(decoded, base_decoded)]
         return float(np.clip(np.mean(vals), 0.0, 1.0))
 
     current = protected
-    decoded = [fn(current) for fn in transforms]
+    decoded = accel.run_parallel([lambda fn=fn: fn(current) for fn in transforms])
     best, best_score = current, score(current, decoded)
 
     lo, hi = span
@@ -114,7 +116,8 @@ def _harden(original: np.ndarray, protected: np.ndarray, settings: Settings,
                             axis=0)
         scale = target_rms / max(_rms(surviving), 1e-9)
         current = _limit(original, base + surviving * scale, ceiling)
-        decoded = [fn(current) for fn in transforms]
+        decoded = accel.run_parallel(
+            [lambda fn=fn, c=current: fn(c) for fn in transforms])
         s_now = score(current, decoded)
         if s_now > best_score:
             best, best_score = current, s_now

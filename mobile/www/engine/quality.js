@@ -1,5 +1,5 @@
 // Measuring cost and durability. Mirrors desktop/src/mistcoat/core/quality.py.
-import { blur, luminance, resizeLongest } from "./imaging.js";
+import { blurFast, luminance, resizeLongest } from "./imaging.js";
 
 export function psnr(a, b) {
   let mse = 0;
@@ -8,13 +8,13 @@ export function psnr(a, b) {
   return mse <= 1e-12 ? 99 : 10 * Math.log10(1 / mse);
 }
 
-export function ssim(a, b, w, h) {
+export async function ssim(a, b, w, h) {
   const x = luminance(a, w, h), y = luminance(b, w, h);
   const n = x.length, sigma = 1.5, c1 = 0.01 ** 2, c2 = 0.03 ** 2;
   const xx = new Float32Array(n), yy = new Float32Array(n), xy = new Float32Array(n);
   for (let i = 0; i < n; i++) { xx[i] = x[i] * x[i]; yy[i] = y[i] * y[i]; xy[i] = x[i] * y[i]; }
-  const mx = blur(x, w, h, sigma), my = blur(y, w, h, sigma);
-  const mxx = blur(xx, w, h, sigma), myy = blur(yy, w, h, sigma), mxy = blur(xy, w, h, sigma);
+  const [mx, my, mxx, myy, mxy] = await Promise.all(
+    [x, y, xx, yy, xy].map((v) => blurFast(v, w, h, sigma)));
   let sum = 0;
   for (let i = 0; i < n; i++) {
     const vx = Math.max(mxx[i] - mx[i] * mx[i], 0);
@@ -80,7 +80,7 @@ export async function measure(original, protectedRgb, w, h, codec, opts = {}) {
   }
   const m = {
     psnr: psnr(original, protectedRgb),
-    ssim: ssim(original, protectedRgb, w, h),
+    ssim: await ssim(original, protectedRgb, w, h),
     maxDelta: maxD * 255,
     meanDelta: (sumD / original.length) * 255,
     survival: 0,

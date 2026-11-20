@@ -10,7 +10,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from . import imaging
+from . import accel, imaging
 
 
 @dataclass
@@ -143,8 +143,9 @@ def measure(original: np.ndarray, protected: np.ndarray,
         if not (a.shape == b.shape and (ref is None or ref.shape == a.shape)):
             a, b, ref = base_for_survival, protected, intended
         # Average over held-out transforms - see imaging.HELD_OUT_TRANSFORMS.
-        scores = [survival(a, b, intended=ref, transform=fn)
-                  for _name, fn in imaging.HELD_OUT_TRANSFORMS]
+        scores = accel.run_parallel(
+            [lambda fn=fn: survival(a, b, intended=ref, transform=fn)
+             for _name, fn in imaging.HELD_OUT_TRANSFORMS])
         surv = float(np.mean(scores))
     return Metrics(
         psnr=psnr(original, protected),

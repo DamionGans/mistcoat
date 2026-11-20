@@ -3,6 +3,7 @@
 // Images are interleaved RGB Float32Arrays (length w*h*3, values 0..1), the
 // same layout numpy uses for an (H, W, 3) array. Single channels are
 // Float32Arrays of length w*h.
+import { gpuBlur } from "./gpu.js";
 
 export function clamp01(v) {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -43,7 +44,8 @@ function boxV(src, dst, w, h, r) {
   }
 }
 
-/** Gaussian approximation: three box passes. Returns a new array. */
+/** Gaussian approximation: three box passes. Returns a new array. CPU only;
+ * the engine itself calls blurFast, which uses the GPU when it can. */
 export function blur(src, w, h, sigma) {
   const out = Float32Array.from(src);
   if (sigma <= 0.01) return out;
@@ -54,6 +56,15 @@ export function blur(src, w, h, sigma) {
     boxH(tmp, out, w, h, r);
   }
   return out;
+}
+
+/** blur() on the GPU when available (see gpu.js), otherwise on the CPU. */
+export async function blurFast(src, w, h, sigma) {
+  if (sigma > 0.01) {
+    const out = await gpuBlur(src, w, h, Math.max(1, Math.round(sigma * 0.886)));
+    if (out) return out;
+  }
+  return blur(src, w, h, sigma);
 }
 
 // --------------------------------------------------------------- analysis
@@ -81,12 +92,12 @@ export function percentile(arr, p, maxSamples = 1_000_000) {
 }
 
 /** 0..1 map of local detail. High where texture can hide perturbation. */
-export function localActivity(rgb, w, h, sigma = 2.0) {
+export async function localActivity(rgb, w, h, sigma = 2.0) {
   const lum = luminance(rgb, w, h);
   const sq = new Float32Array(lum.length);
   for (let i = 0; i < lum.length; i++) sq[i] = lum[i] * lum[i];
-  const mean = blur(lum, w, h, sigma);
-  const meanSq = blur(sq, w, h, sigma);
+  const mean = await blurFast(lum, w, h, sigma);
+  const meanSq = await blurFast(sq, w, h, sigma);
   const std = new Float32Array(lum.length);
   for (let i = 0; i < lum.length; i++) {
     std[i] = Math.sqrt(Math.max(meanSq[i] - mean[i] * mean[i], 0));
