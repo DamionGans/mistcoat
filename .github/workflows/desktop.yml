@@ -63,3 +63,64 @@ jobs:
         with:
           name: Mistcoat-macos-${{ matrix.arch }}
           path: dist/*.dmg
+
+  linux:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # 22.04 is the oldest supported base: the build runs on any distro
+          # with glibc 2.35 or newer (Ubuntu 22.04+, Debian 12+, Fedora 36+).
+          - runner: ubuntu-22.04
+            arch: x86_64
+          - runner: ubuntu-22.04-arm
+            arch: aarch64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install build tools and Qt's runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            flatpak flatpak-builder dbus-daemon \
+            libegl1 libgl1 libfontconfig1 libdbus-1-3 libxkbcommon0 libxkbcommon-x11-0 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-keysyms1 libxcb-shape0 \
+            libxcb-render-util0 libxcb-image0 \
+            libwayland-client0 libwayland-cursor0 libwayland-egl1
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+      - name: Build .deb, .rpm, AppImage and Flatpak
+        env:
+          PYTHON: python
+        run: ./packaging/linux/build_linux.sh
+      # Install each package the way a user would and run its self-test.
+      - name: Test the .deb (Ubuntu)
+        run: |
+          sudo apt-get install -y ./dist/mistcoat_*.deb
+          test -f /usr/share/applications/app.mistcoat.Mistcoat.desktop
+          mistcoat --selftest "$RUNNER_TEMP/deb.json"
+          grep '"ok": true' "$RUNNER_TEMP/deb.json"
+      - name: Test the .rpm (Fedora and openSUSE)
+        run: |
+          docker run --rm -v "$PWD/dist:/d" fedora:43 sh -c \
+            'dnf install -y /d/mistcoat-*.rpm && mistcoat --selftest /tmp/r.json && cat /tmp/r.json && grep -q "\"ok\": true" /tmp/r.json'
+          docker run --rm -v "$PWD/dist:/d" opensuse/tumbleweed sh -c \
+            'zypper --non-interactive install --allow-unsigned-rpm /d/mistcoat-*.rpm && mistcoat --selftest /tmp/r.json && cat /tmp/r.json && grep -q "\"ok\": true" /tmp/r.json'
+      - name: Test the Flatpak
+        run: |
+          flatpak install --user -y --noninteractive dist/Mistcoat-*.flatpak
+          dbus-run-session -- flatpak run --command=mistcoat app.mistcoat.Mistcoat \
+            --selftest "$HOME/flatpak-selftest.json"
+          cat "$HOME/flatpak-selftest.json"
+          grep '"ok": true' "$HOME/flatpak-selftest.json"
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Mistcoat-linux-${{ matrix.arch }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+            dist/*.flatpak

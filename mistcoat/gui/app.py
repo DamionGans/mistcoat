@@ -75,6 +75,17 @@ def _selftest(report_path: str) -> int:
     return 0 if report["ok"] else 1
 
 
+LINUX_APP_ID = "app.mistcoat.Mistcoat"
+
+
+def _icon_path():
+    """assets/icon.png, from the PyInstaller bundle or the source tree."""
+    from pathlib import Path
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+    path = base / "assets" / "icon.png"
+    return path if path.exists() else None
+
+
 def run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     if "--selftest" in argv:
@@ -85,6 +96,14 @@ def run(argv: list[str] | None = None) -> int:
     app = MistcoatApplication(argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_NAME)
+    if sys.platform.startswith("linux"):
+        # Lets Wayland/GNOME/KDE match the window to the installed launcher
+        # (app.mistcoat.Mistcoat.desktop) for its icon and taskbar grouping.
+        app.setDesktopFileName(LINUX_APP_ID)
+    icon = _icon_path()
+    if icon is not None:
+        from PySide6.QtGui import QIcon
+        app.setWindowIcon(QIcon(str(icon)))
     app.setStyle("Fusion")
 
     palette = app.palette()

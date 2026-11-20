@@ -2,6 +2,8 @@
 #
 #   Windows:  pyinstaller packaging/mistcoat.spec   -> dist/Mistcoat.exe
 #   macOS:    pyinstaller packaging/mistcoat.spec   -> dist/Mistcoat.app
+#   Linux:    pyinstaller packaging/mistcoat.spec   -> dist/Mistcoat/ (a folder;
+#             packaging/linux/build_linux.sh wraps it as .deb/.rpm/AppImage/Flatpak)
 #
 # Must be run on the target OS; PyInstaller does not cross-compile.
 import sys
@@ -13,6 +15,7 @@ from mistcoat import __version__  # noqa: E402
 
 IS_MAC = sys.platform == "darwin"
 IS_WIN = sys.platform.startswith("win")
+IS_LINUX = sys.platform.startswith("linux")
 
 # Qt ships a lot we never touch. Dropping it roughly halves the download.
 EXCLUDES = [
@@ -64,6 +67,12 @@ if IS_MAC:
             }],
         },
     )
+elif IS_LINUX:
+    # A folder, not a onefile: package managers install it once instead of the
+    # app unpacking ~150 MB to /tmp on every launch.
+    exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="Mistcoat",
+              console=False, upx=False, strip=False)
+    coll = COLLECT(exe, a.binaries, a.datas, name="Mistcoat", upx=False)
 else:
     exe = EXE(
         pyz, a.scripts, a.binaries, a.datas, [],

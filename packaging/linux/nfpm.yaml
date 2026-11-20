@@ -1,0 +1,72 @@
+# .deb and .rpm from the staged tree in dist/linux/root (see build_linux.sh).
+# ${VERSION} and ${NFPM_ARCH} are filled in from the environment.
+name: mistcoat
+version: ${VERSION}
+arch: ${NFPM_ARCH}
+platform: linux
+section: graphics
+priority: optional
+maintainer: Mistcoat <mistcoat@users.noreply.github.com>
+description: |
+  Protect artwork from AI training and style mimicry.
+  Mistcoat makes small, mostly invisible changes to an image that degrade its
+  value as AI training data, and embeds the standard "do not train" metadata.
+  Everything runs locally; no image is uploaded.
+vendor: Mistcoat
+homepage: https://mistcoat.app
+license: Proprietary
+
+contents:
+  - src: dist/linux/root/opt/mistcoat
+    dst: /opt/mistcoat
+    type: tree
+  - src: /opt/mistcoat/Mistcoat
+    dst: /usr/bin/mistcoat
+    type: symlink
+  - src: dist/linux/root/usr/share
+    dst: /usr/share
+    type: tree
+
+# Qt itself is bundled; these are the system libraries its X11/Wayland
+# platform plugins load at run time.
+overrides:
+  deb:
+    depends:
+      - libegl1
+      - libgl1
+      - libfontconfig1
+      - libdbus-1-3
+      - libxkbcommon0
+      - libxkbcommon-x11-0
+      - libxcb-cursor0
+      - libxcb-icccm4
+      - libxcb-keysyms1
+      - libxcb-shape0
+      - libxcb-render-util0
+      - libxcb-image0
+      - libwayland-client0
+      - libwayland-cursor0
+      - libwayland-egl1
+  rpm:
+    # By shared-library name, so the same .rpm resolves on Fedora, RHEL,
+    # openSUSE and friends, whose package names differ.
+    depends:
+      - libEGL.so.1()(64bit)
+      - libGL.so.1()(64bit)
+      - libfontconfig.so.1()(64bit)
+      - libdbus-1.so.3()(64bit)
+      - libxkbcommon.so.0()(64bit)
+      - libxkbcommon-x11.so.0()(64bit)
+      - libxcb-cursor.so.0()(64bit)
+      - libxcb-icccm.so.4()(64bit)
+      - libxcb-keysyms.so.1()(64bit)
+      - libxcb-shape.so.0()(64bit)
+      - libxcb-render-util.so.0()(64bit)
+      - libxcb-image.so.0()(64bit)
+      - libwayland-client.so.0()(64bit)
+      - libwayland-cursor.so.0()(64bit)
+      - libwayland-egl.so.1()(64bit)
+
+scripts:
+  postinstall: packaging/linux/postinstall.sh
+  postremove: packaging/linux/postinstall.sh

@@ -1,0 +1,31 @@
+# Flatpak manifest. build_linux.sh stages the PyInstaller build in
+# dist/linux/flatpak-src first, then runs flatpak-builder on this file.
+#
+# This repackages the prebuilt binary, which is fine for a downloadable
+# .flatpak bundle. Flathub requires building from source instead; see
+# docs/RELEASING.md.
+app-id: app.mistcoat.Mistcoat
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: mistcoat
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  # Protected copies are saved next to the originals by default, so the app
+  # needs to write wherever the artwork lives.
+  - --filesystem=home
+  - --filesystem=xdg-pictures
+modules:
+  - name: mistcoat
+    buildsystem: simple
+    sources:
+      - type: dir
+        path: ../../dist/linux/flatpak-src
+    build-commands:
+      - mkdir -p /app/lib /app/bin
+      - cp -a mistcoat /app/lib/mistcoat
+      - ln -s /app/lib/mistcoat/Mistcoat /app/bin/mistcoat
+      - cp -a share /app/share

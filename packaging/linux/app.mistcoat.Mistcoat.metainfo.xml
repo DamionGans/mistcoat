@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>app.mistcoat.Mistcoat</id>
+  <name>Mistcoat</name>
+  <summary>Protect artwork from AI training and style mimicry</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer id="app.mistcoat">
+    <name>Mistcoat</name>
+  </developer>
+  <description>
+    <p>
+      Mistcoat makes small, mostly invisible changes to an image that degrade
+      its value as AI training data and confuse models about what it shows,
+      and embeds the standard machine-readable "do not train" declaration.
+    </p>
+    <p>
+      Everything runs on your computer. No image is ever uploaded. A preview
+      shows exactly how much the picture changed and how much of the
+      protection survives the re-compression upload sites apply.
+    </p>
+    <p>
+      No tool can make an image impossible to train on; Mistcoat raises the
+      cost and spoils the result. Keep your unprotected originals.
+    </p>
+  </description>
+  <launchable type="desktop-id">app.mistcoat.Mistcoat.desktop</launchable>
+  <url type="homepage">https://mistcoat.app</url>
+  <categories>
+    <category>Graphics</category>
+  </categories>
+  <provides>
+    <binary>mistcoat</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-11-19"/>
+  </releases>
+</component>

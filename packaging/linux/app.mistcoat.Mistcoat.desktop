@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Mistcoat
+GenericName=Artwork Protector
+Comment=Protect artwork from AI training and style mimicry
+Exec=mistcoat %F
+Icon=app.mistcoat.Mistcoat
+Terminal=false
+Categories=Graphics;RasterGraphics;
+MimeType=image/png;image/jpeg;image/webp;image/tiff;image/bmp;
+Keywords=AI;art;artwork;protect;scraping;training;glaze;
+StartupWMClass=Mistcoat
+StartupNotify=true

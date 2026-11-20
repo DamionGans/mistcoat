@@ -6,4 +6,5 @@ dist/
 samples/out/
 release/
 .venv-mac/
+.venv-linux/
 mobile/node_modules/
