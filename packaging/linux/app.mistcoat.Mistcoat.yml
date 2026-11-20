@@ -21,6 +21,11 @@ finish-args:
 modules:
   - name: mistcoat
     buildsystem: simple
+    # Prebuilt PyInstaller output: stripping it would corrupt the bundled
+    # Python archive, and there is no debug info worth splitting out.
+    build-options:
+      no-debuginfo: true
+      strip: false
     sources:
       - type: dir
         path: ../../dist/linux/flatpak-src
