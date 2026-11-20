@@ -12,7 +12,10 @@ $py = ".\.venv\Scripts\python.exe"
 & $py -m PyInstaller packaging\mistcoat.spec --noconfirm --distpath dist --workpath build
 
 # Prove the build works before shipping it.
-& .\dist\Mistcoat.exe --selftest dist\selftest.json
+# It is a windowed exe, so PowerShell would not wait for it on its own.
+Remove-Item dist\selftest.json -ErrorAction SilentlyContinue
+$proc = Start-Process .\dist\Mistcoat.exe -ArgumentList "--selftest", "dist\selftest.json" -Wait -PassThru
+if (-not (Test-Path dist\selftest.json)) { throw "Self-test wrote no report (exit code $($proc.ExitCode))" }
 $report = Get-Content dist\selftest.json -Raw | ConvertFrom-Json
 if (-not $report.ok) { throw "Self-test failed: $($report.error)" }
 Write-Host "Built dist\Mistcoat.exe - self-test passed (durability $($report.durability))"
