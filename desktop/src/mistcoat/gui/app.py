@@ -79,11 +79,10 @@ LINUX_APP_ID = "app.mistcoat.Mistcoat"
 
 
 def _icon_path():
-    """assets/icon.png, from the PyInstaller bundle or the source tree."""
-    from pathlib import Path
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
-    path = base / "assets" / "icon.png"
-    return path if path.exists() else None
+    """The window icon, shipped as package data (mistcoat/resources)."""
+    from importlib.resources import files
+    path = files("mistcoat") / "resources" / "icon.png"
+    return path if path.is_file() else None
 
 
 def run(argv: list[str] | None = None) -> int:

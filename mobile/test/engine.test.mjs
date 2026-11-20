@@ -1,4 +1,4 @@
-// Tests for the JavaScript engine (node --test). Mirrors tests/test_core.py,
+// Tests for the JavaScript engine (node --test). Mirrors desktop/tests/test_core.py,
 // plus a cross-engine check against the desktop engine's measured output.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

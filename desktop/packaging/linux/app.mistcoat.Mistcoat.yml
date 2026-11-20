@@ -1,5 +1,5 @@
-# Flatpak manifest. build_linux.sh stages the PyInstaller build in
-# dist/linux/flatpak-src first, then runs flatpak-builder on this file.
+# Flatpak manifest. build.sh stages the PyInstaller build in
+# desktop/dist/linux/flatpak-src first, then runs flatpak-builder on this file.
 #
 # This repackages the prebuilt binary, which is fine for a downloadable
 # .flatpak bundle. Flathub requires building from source instead; see

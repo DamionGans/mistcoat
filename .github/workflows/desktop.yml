@@ -7,6 +7,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+defaults:
+  run:
+    working-directory: desktop
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -17,8 +21,8 @@ jobs:
           python-version: "3.13"
       - name: Qt's system libraries (the GUI tests import PySide6)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3
-      - run: pip install -r requirements.txt pytest
-      - run: python -m pytest tests -q
+      - run: pip install -e ".[dev]"
+      - run: python -m pytest
 
   windows:
     needs: test
@@ -32,11 +36,11 @@ jobs:
         shell: pwsh
         run: |
           python -m venv .venv
-          ./packaging/build_windows.ps1
+          ./packaging/windows/build.ps1
       - uses: actions/upload-artifact@v5
         with:
           name: Mistcoat-windows-x64
-          path: dist/Mistcoat.exe
+          path: desktop/dist/Mistcoat.exe
 
   macos:
     needs: test
@@ -60,11 +64,11 @@ jobs:
           # Optional - set these repository secrets to ship a notarised build.
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
           MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
-        run: ./packaging/build_mac.sh
+        run: ./packaging/macos/build.sh
       - uses: actions/upload-artifact@v5
         with:
           name: Mistcoat-macos-${{ matrix.arch }}
-          path: dist/*.dmg
+          path: desktop/dist/*.dmg
 
   linux:
     needs: test
@@ -103,7 +107,7 @@ jobs:
           FLATPAK_BUILDER: flatpak run org.flatpak.Builder
         # The sandboxed builder talks to the host's flatpak over D-Bus, which a
         # headless runner has no session for.
-        run: dbus-run-session -- ./packaging/linux/build_linux.sh
+        run: dbus-run-session -- ./packaging/linux/build.sh
       # Install each package the way a user would and run its self-test.
       - name: Test the .deb (Ubuntu)
         run: |
@@ -128,7 +132,7 @@ jobs:
         with:
           name: Mistcoat-linux-${{ matrix.arch }}
           path: |
-            dist/*.deb
-            dist/*.rpm
-            dist/*.AppImage
-            dist/*.flatpak
+            desktop/dist/*.deb
+            desktop/dist/*.rpm
+            desktop/dist/*.AppImage
+            desktop/dist/*.flatpak

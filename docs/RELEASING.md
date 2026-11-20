@@ -12,37 +12,37 @@ store accounts, which only the publisher can set up.
    run a proper trademark search (USPTO / EUIPO / the artist's own country).
 2. **Bundle identifiers** are set to `app.mistcoat.desktop` (macOS) and
    `app.mistcoat.mobile` (Android/iOS). If a different domain is used,
-   change them in `packaging/mistcoat.spec`, `mobile/capacitor.config.json`,
+   change them in `desktop/packaging/pyinstaller/mistcoat.spec`, `mobile/capacitor.config.json`,
    then run `npx cap sync`. They cannot change after a store release.
-3. **Bump the version** in `mistcoat/__init__.py`, `packaging/win_version.txt`,
+3. **Bump the version** in `desktop/src/mistcoat/__init__.py`, `desktop/packaging/windows/version_info.txt`,
    `mobile/package.json`, `MARKETING_VERSION` in
    `mobile/ios/App/App.xcodeproj/project.pbxproj`, `versionName` (and
    `versionCode`) in `mobile/android/app/build.gradle`, the `VERSION` constant in `mobile/www/sw.js`, and
-   add a `<release>` line to `packaging/linux/app.mistcoat.Mistcoat.metainfo.xml`.
+   add a `<release>` line to `desktop/packaging/linux/app.mistcoat.Mistcoat.metainfo.xml`.
 4. **Pick a licence.** There is no LICENSE file yet, so the Linux packages
-   declare the app proprietary (`license:` in `packaging/linux/nfpm.yaml`,
+   declare the app proprietary (`license:` in `desktop/packaging/linux/nfpm.yaml`,
    `project_license` in the metainfo). Update both once one is chosen.
 
 ## Windows
 
-`dist\Mistcoat.exe` runs as is, but unsigned executables trigger SmartScreen
+`desktop\dist\Mistcoat.exe` runs as is, but unsigned executables trigger SmartScreen
 ("Windows protected your PC" → *More info* → *Run anyway*). To remove that:
 
 - Get an OV or EV code-signing certificate, or use Azure Trusted Signing
   (the cheapest option for individuals).
-- Sign: `signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a dist\Mistcoat.exe`
+- Sign: `signtool sign /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /a desktop\dist\Mistcoat.exe`
 - Optional: publish through the Microsoft Store (MSIX), which signs for you.
 
 ## macOS
 
-`packaging/build_mac.sh` ad-hoc signs by default. Such a build opens on other
+`desktop/packaging/macos/build.sh` ad-hoc signs by default. Such a build opens on other
 Macs only via right-click → *Open*. For a normal double-click install:
 
 1. Join the Apple Developer Program (99 USD / year).
 2. Create a **Developer ID Application** certificate in Xcode.
 3. `xcrun notarytool store-credentials mistcoat-notary --apple-id … --team-id …`
 4. Build with:
-   `MAC_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" MAC_NOTARY_PROFILE=mistcoat-notary ./packaging/build_mac.sh`
+   `MAC_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" MAC_NOTARY_PROFILE=mistcoat-notary ./desktop/packaging/macos/build.sh`
 
 CI does the same if the `MAC_SIGN_IDENTITY` and `MAC_NOTARY_PROFILE` secrets
 are set (the certificate must also be imported into the runner's keychain;
@@ -52,7 +52,7 @@ The CI builds separate Apple Silicon (`arm64`) and Intel (`x86_64`) DMGs.
 
 ## Linux
 
-`packaging/linux/build_linux.sh` produces all four formats. CI builds them for
+`desktop/packaging/linux/build.sh` produces all four formats. CI builds them for
 x86_64 and ARM64 and install-tests each one: the .deb on Ubuntu, the .rpm on
 Fedora and openSUSE, the Flatpak and the AppImage directly. None need signing
 to install. For publishing:

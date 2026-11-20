@@ -4,7 +4,11 @@ A shield whose lower half dissolves into a pixel grid: the artwork stays whole
 to a person, and breaks up for the machine. Drawn with Pillow so the icon has
 no external asset dependency and can be regenerated on any OS.
 
-    python tools/make_icons.py
+    python scripts/make_icons.py
+
+Writes the brand master (assets/icon.png), the desktop app's window icon and
+installer icons (desktop/), and the web, Android and iOS icons (mobile/).
+The outputs are committed; rerun this only when the design changes.
 """
 from __future__ import annotations
 
@@ -15,6 +19,8 @@ from PIL import Image, ImageDraw, ImageFilter
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
+DESKTOP = ROOT / "desktop"
+WWW = ROOT / "mobile" / "www"
 
 
 def shield_mask(size: int) -> Image.Image:
@@ -96,20 +102,21 @@ def main() -> None:
     ASSETS.mkdir(exist_ok=True)
     master = render(1024)
     master.save(ASSETS / "icon.png")
-    master.save(ASSETS / "icon.ico",
+    master.save(DESKTOP / "src" / "mistcoat" / "resources" / "icon.png")
+    master.save(DESKTOP / "packaging" / "windows" / "mistcoat.ico",
                 sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64),
                        (128, 128), (256, 256)])
-    master.save(ASSETS / "icon.icns")
-    # Mobile / PWA sizes.
+    master.save(DESKTOP / "packaging" / "macos" / "mistcoat.icns")
+    # Web app (PWA) sizes.
     for px in (192, 512):
-        master.resize((px, px), Image.LANCZOS).save(ASSETS / f"icon-{px}.png")
+        master.resize((px, px), Image.LANCZOS).save(WWW / f"icon-{px}.png")
     # Maskable PWA icon: content within the inner 80% safe zone.
     safe = Image.new("RGBA", (512, 512), (30, 34, 44, 255))
     safe.paste(master.resize((410, 410), Image.LANCZOS), (51, 51),
                master.resize((410, 410), Image.LANCZOS))
-    safe.save(ASSETS / "icon-maskable-512.png")
+    safe.save(WWW / "icon-maskable-512.png")
     write_mobile(master)
-    print("icons written to", ASSETS)
+    print("icons written")
 
 
 BG = (30, 34, 44, 255)   # matches the tile's top colour

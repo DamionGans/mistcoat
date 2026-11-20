@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 # Build Mistcoat for Linux: .deb, .rpm, AppImage and Flatpak bundle.
 #
-#   ./packaging/linux/build_linux.sh
+#   ./desktop/packaging/linux/build.sh
 #
 # Needs Python 3.11+, curl, and for the Flatpak: flatpak with the Flathub remote
 # and a current flatpak-builder. Distro packages of flatpak-builder older than
 # 1.4 cannot build for the 25.08 runtime; the Flathub build works everywhere:
 #   flatpak install --user flathub org.flatpak.Builder
-#   FLATPAK_BUILDER="flatpak run org.flatpak.Builder" ./packaging/linux/build_linux.sh
+#   FLATPAK_BUILDER="flatpak run org.flatpak.Builder" ./desktop/packaging/linux/build.sh
 # Set SKIP_FLATPAK=1 to leave that one out. Outputs land in
-# dist/:
+# desktop/dist/:
 #   mistcoat_<ver>_<amd64|arm64>.deb
 #   mistcoat-<ver>-1.<x86_64|aarch64>.rpm
 #   Mistcoat-<ver>-linux-<arch>.AppImage
@@ -18,7 +18,7 @@
 # Build on the oldest distro you want to support (CI uses Ubuntu 22.04): the
 # binaries only run on systems whose glibc is at least as new.
 set -euo pipefail
-cd "$(dirname "$0")/../.."
+cd "$(dirname "$0")/../.."   # desktop/
 
 APP_ID=app.mistcoat.Mistcoat
 NFPM_VERSION=2.48.0
@@ -33,15 +33,14 @@ case "$ARCH" in
 esac
 
 PY=${PYTHON:-python3}
-if [ ! -d .venv-linux ]; then "$PY" -m venv .venv-linux; fi
-source .venv-linux/bin/activate
+if [ ! -d .venv ]; then "$PY" -m venv .venv; fi
+source .venv/bin/activate
 python -m pip install --quiet --upgrade pip
-python -m pip install --quiet -r requirements.txt pyinstaller
+python -m pip install --quiet -e ".[dev]"
 
 VERSION=$(python -c "import mistcoat; print(mistcoat.__version__)")
-python tools/make_icons.py
 rm -rf build/mistcoat dist/Mistcoat dist/linux
-python -m PyInstaller packaging/mistcoat.spec --noconfirm --distpath dist --workpath build
+python -m PyInstaller packaging/pyinstaller/mistcoat.spec --noconfirm --distpath dist --workpath build
 
 # 1. Prove the raw build works before wrapping it.
 dist/Mistcoat/Mistcoat --selftest dist/selftest.json
@@ -56,7 +55,7 @@ import sys
 from pathlib import Path
 from PIL import Image
 share, app_id = Path(sys.argv[1]), sys.argv[2]
-master = Image.open("assets/icon.png")
+master = Image.open("src/mistcoat/resources/icon.png")
 for px in (16, 24, 32, 48, 64, 128, 256, 512):
     out = share / "icons" / "hicolor" / f"{px}x{px}" / "apps" / f"{app_id}.png"
     out.parent.mkdir(parents=True, exist_ok=True)

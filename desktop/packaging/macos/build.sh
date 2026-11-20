@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build Mistcoat.app and a drag-to-Applications .dmg on macOS.
 #
-#   ./packaging/build_mac.sh
+#   ./desktop/packaging/macos/build.sh
 #
-# Produces dist/Mistcoat.app and dist/Mistcoat-<version>-macos-<arch>.dmg.
+# Produces desktop/dist/Mistcoat.app and desktop/dist/Mistcoat-<version>-macos-<arch>.dmg.
 #
 # Signing: by default the app is ad-hoc signed, which runs on the machine that
 # built it and, after a right-click > Open, on others. For distribution without
@@ -11,22 +11,21 @@
 #   MAC_SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)"
 #   MAC_NOTARY_PROFILE="mistcoat-notary"   # from `xcrun notarytool store-credentials`
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../.."   # desktop/
 
 PY=${PYTHON:-python3}
 ARCH=$(uname -m)
 
-if [ ! -d .venv-mac ]; then
-  "$PY" -m venv .venv-mac
+if [ ! -d .venv ]; then
+  "$PY" -m venv .venv
 fi
-source .venv-mac/bin/activate
+source .venv/bin/activate
 python -m pip install --quiet --upgrade pip
-python -m pip install --quiet -r requirements.txt pyinstaller
+python -m pip install --quiet -e ".[dev]"
 
 VERSION=$(python -c "import mistcoat; print(mistcoat.__version__)")
-python tools/make_icons.py
 rm -rf build dist
-python -m PyInstaller packaging/mistcoat.spec --noconfirm --distpath dist --workpath build
+python -m PyInstaller packaging/pyinstaller/mistcoat.spec --noconfirm --distpath dist --workpath build
 
 APP=dist/Mistcoat.app
 IDENTITY=${MAC_SIGN_IDENTITY:--}

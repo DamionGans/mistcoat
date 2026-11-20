@@ -1,4 +1,4 @@
-// Measuring cost and durability. Mirrors mistcoat/core/quality.py.
+// Measuring cost and durability. Mirrors desktop/src/mistcoat/core/quality.py.
 import { blur, luminance, resizeLongest } from "./imaging.js";
 
 export function psnr(a, b) {

@@ -1,4 +1,4 @@
-// Signal primitives. A line-for-line port of mistcoat/core/imaging.py.
+// Signal primitives. A line-for-line port of desktop/src/mistcoat/core/imaging.py.
 //
 // Images are interleaved RGB Float32Arrays (length w*h*3, values 0..1), the
 // same layout numpy uses for an (H, W, 3) array. Single channels are

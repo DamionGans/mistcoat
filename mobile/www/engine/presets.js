@@ -1,4 +1,4 @@
-// Settings and presets. Mirrors mistcoat/core/presets.py.
+// Settings and presets. Mirrors desktop/src/mistcoat/core/presets.py.
 import { ALL_PASSES } from "./passes.js";
 
 export function defaultSettings() {

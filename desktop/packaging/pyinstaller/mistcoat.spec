@@ -1,16 +1,21 @@
 # PyInstaller spec - one file for both desktop targets.
 #
-#   Windows:  pyinstaller packaging/mistcoat.spec   -> dist/Mistcoat.exe
-#   macOS:    pyinstaller packaging/mistcoat.spec   -> dist/Mistcoat.app
-#   Linux:    pyinstaller packaging/mistcoat.spec   -> dist/Mistcoat/ (a folder;
-#             packaging/linux/build_linux.sh wraps it as .deb/.rpm/AppImage/Flatpak)
+# Run from desktop/ (the build scripts in packaging/<os>/ do this):
+#
+#   Windows:  pyinstaller packaging/pyinstaller/mistcoat.spec -> dist/Mistcoat.exe
+#   macOS:    pyinstaller packaging/pyinstaller/mistcoat.spec -> dist/Mistcoat.app
+#   Linux:    pyinstaller packaging/pyinstaller/mistcoat.spec -> dist/Mistcoat/ (a
+#             folder; packaging/linux/build.sh wraps it as .deb/.rpm/AppImage/Flatpak)
 #
 # Must be run on the target OS; PyInstaller does not cross-compile.
 import sys
 from pathlib import Path
 
-ROOT = Path(SPECPATH).parent
-sys.path.insert(0, str(ROOT))
+HERE = Path(SPECPATH)                 # desktop/packaging/pyinstaller
+DESKTOP = HERE.parents[1]             # desktop/
+SRC = DESKTOP / "src"
+PACKAGING = DESKTOP / "packaging"
+sys.path.insert(0, str(SRC))
 from mistcoat import __version__  # noqa: E402
 
 IS_MAC = sys.platform == "darwin"
@@ -30,16 +35,17 @@ EXCLUDES = [
 ]
 
 a = Analysis(
-    [str(ROOT / "packaging" / "launch.py")],
-    pathex=[str(ROOT)],
-    datas=[(str(ROOT / "assets" / "icon.png"), "assets")],
+    [str(HERE / "launch.py")],
+    pathex=[str(SRC)],
+    datas=[(str(SRC / "mistcoat" / "resources"), "mistcoat/resources")],
     hiddenimports=["PIL.ImageCms"],
     excludes=EXCLUDES,
     noarchive=False,
 )
 pyz = PYZ(a.pure)
 
-icon = str(ROOT / "assets" / ("icon.icns" if IS_MAC else "icon.ico"))
+icon = str(PACKAGING / "macos" / "mistcoat.icns" if IS_MAC
+          else PACKAGING / "windows" / "mistcoat.ico")
 
 if IS_MAC:
     exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="Mistcoat",
@@ -80,5 +86,5 @@ else:
         console=False,
         icon=icon,
         upx=False,          # UPX-packed Qt binaries trip antivirus heuristics
-        version=str(ROOT / "packaging" / "win_version.txt") if IS_WIN else None,
+        version=str(PACKAGING / "windows" / "version_info.txt") if IS_WIN else None,
     )

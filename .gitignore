@@ -1,10 +1,17 @@
-.venv/
+# Python
 __pycache__/
-*.pyc
-build/
-dist/
-samples/out/
+*.py[cod]
+*.egg-info/
+.venv*/
+.pytest_cache/
+
+# Build output
+desktop/build/
+desktop/dist/
 release/
-.venv-mac/
-.venv-linux/
-mobile/node_modules/
+
+# Node / mobile
+node_modules/
+
+# Local scratch output
+samples/out/

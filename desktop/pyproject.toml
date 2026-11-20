@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mistcoat"
+dynamic = ["version"]
+description = "Protect artwork from AI training and style mimicry"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=2.0",
+    "pillow>=11.0",
+    "PySide6>=6.7",   # 6.7 adds the Windows 11 style
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pyinstaller>=6.10",
+]
+
+[project.scripts]
+mistcoat = "mistcoat.cli:main"
+
+[project.gui-scripts]
+mistcoat-gui = "mistcoat.gui.app:run"
+
+[tool.setuptools.dynamic]
+version = { attr = "mistcoat.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+mistcoat = ["resources/*.png"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"

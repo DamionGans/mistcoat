@@ -1,4 +1,4 @@
-// The protection pipeline. Mirrors mistcoat/core/pipeline.py - read that file
+// The protection pipeline. Mirrors desktop/src/mistcoat/core/pipeline.py - read that file
 // for the reasoning behind each step; comments here are kept short.
 import { clamp01, resizeLongest } from "./imaging.js";
 import { ALL_PASSES, PassContext } from "./passes.js";

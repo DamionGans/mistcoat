@@ -1,4 +1,5 @@
-# .deb and .rpm from the staged tree in dist/linux/root (see build_linux.sh).
+# .deb and .rpm from the staged tree in dist/linux/root (see build.sh).
+# Paths are relative to desktop/, where build.sh runs nfpm.
 # ${VERSION} and ${NFPM_ARCH} are filled in from the environment.
 name: mistcoat
 version: ${VERSION}

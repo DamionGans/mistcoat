@@ -1,4 +1,4 @@
-// Minimal static server for local testing: node tools/serve.mjs [port]
+// Minimal static server for local testing: node scripts/serve.mjs [port]
 import { createServer } from "node:http";
 import { readFile, stat } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";

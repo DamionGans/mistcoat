@@ -1,4 +1,4 @@
-// The five perturbation passes. A port of mistcoat/core/passes/*.py - same
+// The five perturbation passes. A port of desktop/src/mistcoat/core/passes/*.py - same
 // constants, same masking, same order. The random streams differ from numpy's
 // (different generator), so outputs match the desktop app in character and
 // measured cost, not bit for bit.

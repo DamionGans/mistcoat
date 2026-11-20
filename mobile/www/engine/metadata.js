@@ -1,4 +1,4 @@
-// Opt-out metadata. Mirrors mistcoat/core/output.py: the IPTC/PLUS
+// Opt-out metadata. Mirrors desktop/src/mistcoat/core/output.py: the IPTC/PLUS
 // "Data Mining" property, written into PNG (iTXt) and JPEG (APP1) byte streams.
 //
 // Like the desktop app, this does NOT announce "this image was protected by
