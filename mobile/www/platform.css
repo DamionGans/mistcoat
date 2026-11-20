@@ -1,0 +1,340 @@
+/* Platform design languages, layered over styles.css.
+
+   data-platform="ios"      Apple Human Interface Guidelines: large title,
+                            inset grouped lists, segmented control, switches,
+                            system colours.
+   data-platform="android"  Material 3: top app bar, filled cards, pill
+                            buttons, segmented buttons, switches, filled text
+                            fields, tonal colour roles.
+   data-platform="web"      the neutral look in styles.css, unchanged.
+
+   Both follow the system's light/dark setting. The image canvas stays a
+   hueless grey on every platform so it never tints colour judgement. */
+
+/* ======================================================================
+   iOS
+   ====================================================================== */
+
+:root[data-platform="ios"] {
+  --bg: #f2f2f7;                      /* systemGroupedBackground */
+  --surface: #ffffff;                 /* secondarySystemGroupedBackground */
+  --surface-2: rgba(118, 118, 128, 0.12);  /* tertiarySystemFill */
+  --line: rgba(60, 60, 67, 0.29);     /* separator */
+  --text: #000000;
+  --muted: rgba(60, 60, 67, 0.6);     /* secondaryLabel */
+  --accent: #007aff;                  /* systemBlue */
+  --accent-ink: #ffffff;
+  --good: #248a3d;
+  --warn: #c93400;
+  --canvas: #e3e3e3;
+  --switch-off: rgba(120, 120, 128, 0.16);
+  --switch-on: #34c759;               /* systemGreen */
+  --segment-on: #ffffff;
+  --shadow: none;
+  --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="ios"]:not([data-theme="light"]) {
+    --bg: #000000; --surface: #1c1c1e; --surface-2: rgba(118, 118, 128, 0.24);
+    --line: rgba(84, 84, 88, 0.65); --text: #ffffff; --muted: rgba(235, 235, 245, 0.6);
+    --accent: #0a84ff; --accent-ink: #ffffff; --good: #30d158; --warn: #ff9f0a;
+    --canvas: #141414; --switch-off: rgba(120, 120, 128, 0.32); --switch-on: #30d158;
+    --segment-on: #636366;
+    color-scheme: dark;
+  }
+}
+:root[data-platform="ios"][data-theme="dark"] {
+  --bg: #000000; --surface: #1c1c1e; --surface-2: rgba(118, 118, 128, 0.24);
+  --line: rgba(84, 84, 88, 0.65); --text: #ffffff; --muted: rgba(235, 235, 245, 0.6);
+  --accent: #0a84ff; --accent-ink: #ffffff; --good: #30d158; --warn: #ff9f0a;
+  --canvas: #141414; --switch-off: rgba(120, 120, 128, 0.32); --switch-on: #30d158;
+  --segment-on: #636366;
+  color-scheme: dark;
+}
+
+[data-platform="ios"] body {
+  font: 17px/1.29 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  letter-spacing: -0.022em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Large title navigation bar. */
+[data-platform="ios"] .top { padding-top: 10px; padding-bottom: 2px; }
+[data-platform="ios"] .top .logo { display: none; }
+[data-platform="ios"] .top h1 { font-size: 34px; font-weight: 700; letter-spacing: 0.011em; line-height: 1.2; }
+[data-platform="ios"] .top .tag { font-size: 15px; letter-spacing: -0.016em; }
+
+/* Inset grouped sections: header text sits above the rounded group. */
+[data-platform="ios"] .card {
+  border: 0; border-radius: 10px; padding: 12px 16px; margin: 20px 0; position: relative;
+}
+[data-platform="ios"] .card:has(> h3) { margin-top: 38px; }
+[data-platform="ios"] .card > h3 {
+  position: absolute; top: -24px; left: 16px; margin: 0;
+  font-size: 13px; font-weight: 400; letter-spacing: -0.006em;
+  text-transform: uppercase; color: var(--muted);
+}
+[data-platform="ios"] h2 { font-size: 20px; font-weight: 600; letter-spacing: -0.024em; }
+[data-platform="ios"] .small, [data-platform="ios"] .fine { font-size: 13px; letter-spacing: -0.006em; }
+[data-platform="ios"] .dropzone { border: 0; padding: 36px 20px; }
+[data-platform="ios"] .dropzone svg { color: var(--accent); }
+
+/* Buttons: filled for the main action, gray-filled or plain tinted text
+   otherwise. iOS dims on press rather than scaling. */
+[data-platform="ios"] .btn {
+  border: 0; border-radius: 12px; min-height: 44px; padding: 0 16px;
+  background: var(--surface-2); color: var(--accent);
+  font-size: 17px; font-weight: 400;
+  transition: opacity 0.1s;
+}
+[data-platform="ios"] .btn.primary { background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+[data-platform="ios"] .btn.big { min-height: 50px; border-radius: 12px; font-size: 17px; }
+[data-platform="ios"] .btn.ghost { background: transparent; }
+[data-platform="ios"] .btn:active { transform: none; opacity: 0.55; }
+[data-platform="ios"] .btn[disabled] { opacity: 0.35; }
+[data-platform="ios"] .linkish { text-decoration: none; }
+
+/* Segmented control. */
+[data-platform="ios"] .segmented {
+  display: flex; gap: 0; padding: 2px; border-radius: 9px; background: var(--surface-2);
+}
+[data-platform="ios"] .segmented button {
+  flex: 1; min-height: 32px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--text); font-size: 13px; font-weight: 500; letter-spacing: -0.006em;
+  position: relative;
+}
+[data-platform="ios"] .segmented button + button::before {
+  content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 1px;
+  background: var(--line); opacity: 0.6;
+}
+[data-platform="ios"] .segmented button[aria-checked="true"] {
+  background: var(--segment-on); color: var(--text); font-weight: 600;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.12), 0 3px 1px rgba(0, 0, 0, 0.04);
+}
+[data-platform="ios"] .segmented button[aria-checked="true"]::before,
+[data-platform="ios"] .segmented button[aria-checked="true"] + button::before { display: none; }
+
+/* Settings rows: label left, switch right, hairline separators. */
+[data-platform="ios"] .check {
+  flex-direction: row-reverse; justify-content: space-between; align-items: center;
+  gap: 12px; padding: 11px 0; border-bottom: 0.5px solid var(--line);
+}
+[data-platform="ios"] .check small { font-size: 13px; margin-top: 2px; }
+[data-platform="ios"] .check input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none;
+  width: 51px; height: 31px; margin: 0; border-radius: 16px;
+  background: var(--switch-off); position: relative; cursor: pointer;
+  transition: background 0.2s;
+}
+[data-platform="ios"] .check input[type="checkbox"]::before {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px;
+  border-radius: 50%; background: #ffffff;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15), 0 3px 1px rgba(0, 0, 0, 0.06);
+  transition: transform 0.2s;
+}
+[data-platform="ios"] .check input[type="checkbox"]:checked { background: var(--switch-on); }
+[data-platform="ios"] .check input[type="checkbox"]:checked::before { transform: translateX(20px); }
+[data-platform="ios"] legend { text-transform: uppercase; letter-spacing: -0.006em; font-size: 13px; }
+
+[data-platform="ios"] .field { font-size: 15px; }
+[data-platform="ios"] .field input, [data-platform="ios"] .field select {
+  border: 0; border-radius: 10px; background: var(--surface-2); font-size: 17px;
+}
+
+/* Disclosure row with a chevron. */
+[data-platform="ios"] details { border-top: 0.5px solid var(--line); }
+[data-platform="ios"] summary { list-style: none; font-weight: 400; justify-content: space-between; min-height: 44px; }
+[data-platform="ios"] summary::-webkit-details-marker { display: none; }
+[data-platform="ios"] summary::after {
+  content: ""; width: 8px; height: 8px; margin-right: 4px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(-45deg); transition: transform 0.2s;
+}
+[data-platform="ios"] details[open] > summary::after { transform: rotate(45deg); }
+
+[data-platform="ios"] .progress .bar { height: 4px; border-radius: 2px; }
+[data-platform="ios"] .thumb { border-radius: 8px; }
+[data-platform="ios"] .results li { border-bottom-width: 0.5px; }
+[data-platform="ios"] footer { font-size: 13px; color: var(--muted); }
+[data-platform="ios"] footer strong { color: var(--text); font-weight: 600; }
+[data-platform="ios"] dialog { border: 0; border-radius: 14px; }
+[data-platform="ios"] .metric .k { font-size: 13px; }
+
+/* ======================================================================
+   Android - Material 3 (tonal scheme from a neutral blue seed)
+   ====================================================================== */
+
+:root[data-platform="android"] {
+  --bg: #f9f9ff;                 /* surface */
+  --surface: #ededf4;            /* surface-container */
+  --surface-2: #e2e2e9;          /* surface-container-highest */
+  --surface-high: #e7e8ee;       /* surface-container-high */
+  --line: #c4c6d0;               /* outline-variant */
+  --outline: #74777f;
+  --text: #191c20;               /* on-surface */
+  --muted: #44474e;              /* on-surface-variant */
+  --accent: #415f91;             /* primary */
+  --accent-ink: #ffffff;         /* on-primary */
+  --tonal: #dae2f9;              /* secondary-container */
+  --on-tonal: #131c2b;
+  --good: #1b6c2e;
+  --warn: #8b5000;
+  --canvas: #e0e0e0;
+  --shadow: none;
+  --radius: 12px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-platform="android"]:not([data-theme="light"]) {
+    --bg: #111318; --surface: #1d2024; --surface-2: #33353a; --surface-high: #282a2f;
+    --line: #44474e; --outline: #8e9099; --text: #e2e2e9; --muted: #c4c6d0;
+    --accent: #aac7ff; --accent-ink: #0a305f; --tonal: #3e4759; --on-tonal: #dae2f9;
+    --good: #8fd88b; --warn: #ffb870; --canvas: #141414;
+    color-scheme: dark;
+  }
+}
+:root[data-platform="android"][data-theme="dark"] {
+  --bg: #111318; --surface: #1d2024; --surface-2: #33353a; --surface-high: #282a2f;
+  --line: #44474e; --outline: #8e9099; --text: #e2e2e9; --muted: #c4c6d0;
+  --accent: #aac7ff; --accent-ink: #0a305f; --tonal: #3e4759; --on-tonal: #dae2f9;
+  --good: #8fd88b; --warn: #ffb870; --canvas: #141414;
+  color-scheme: dark;
+}
+
+[data-platform="android"] body {
+  font: 16px/1.5 Roboto, "Google Sans Text", system-ui, sans-serif;
+  letter-spacing: 0.031em;       /* body-large tracking */
+}
+
+/* Top app bar. */
+[data-platform="android"] .top {
+  position: sticky; top: 0; z-index: 2; background: var(--bg);
+  min-height: 64px; padding-top: 8px; padding-bottom: 8px;
+}
+/* Material "on scroll" state: the bar takes the container colour. */
+[data-platform="android"] .top.scrolled { background: var(--surface); transition: background 0.2s; }
+[data-platform="android"] .top .logo { width: 32px; height: 32px; border-radius: 50%; }
+[data-platform="android"] .top h1 { font-size: 22px; font-weight: 400; letter-spacing: 0; line-height: 28px; }
+[data-platform="android"] .top .tag { font-size: 14px; letter-spacing: 0.018em; }
+
+/* Filled cards. */
+[data-platform="android"] .card { border: 0; border-radius: 12px; padding: 16px; }
+[data-platform="android"] .card > h3, [data-platform="android"] legend {
+  font-size: 14px; font-weight: 500; letter-spacing: 0.007em;
+  text-transform: none; color: var(--accent);
+}
+[data-platform="android"] h2 { font-size: 22px; font-weight: 400; letter-spacing: 0; }
+[data-platform="android"] .small, [data-platform="android"] .fine { font-size: 14px; letter-spacing: 0.018em; }
+[data-platform="android"] .fine { font-size: 12px; letter-spacing: 0.033em; }
+[data-platform="android"] .dropzone { border: 0; background: var(--surface); border-radius: 28px; }
+[data-platform="android"] .dropzone svg { color: var(--accent); }
+
+/* Buttons: filled (primary), tonal (default), outlined (ghost). A state
+   layer of the content colour shows on press, as Material does. */
+[data-platform="android"] .btn {
+  border: 0; border-radius: 20px; min-height: 40px; padding: 0 24px;
+  background: var(--tonal); color: var(--on-tonal);
+  font-size: 14px; font-weight: 500; letter-spacing: 0.007em;
+}
+[data-platform="android"] .btn.primary { background: var(--accent); color: var(--accent-ink); }
+[data-platform="android"] .btn.ghost { background: transparent; color: var(--accent); border: 1px solid var(--outline); }
+[data-platform="android"] .viewer-tools .btn { padding: 0 12px; }
+[data-platform="android"] .btn.big { min-height: 56px; border-radius: 28px; font-size: 16px; padding: 0 28px; }
+[data-platform="android"] .btn:active,
+[data-platform="android"] .segmented button:active {
+  transform: none;
+  box-shadow: inset 0 0 0 100px color-mix(in srgb, currentColor 12%, transparent);
+}
+[data-platform="android"] .btn[disabled] { opacity: 0.38; }
+[data-platform="android"] .linkish { text-decoration: none; font-weight: 500; }
+
+/* Segmented buttons. */
+[data-platform="android"] .segmented {
+  display: flex; gap: 0; border: 1px solid var(--outline); border-radius: 20px; overflow: hidden;
+}
+[data-platform="android"] .segmented button {
+  flex: 1; min-height: 40px; border: 0; border-radius: 0; background: transparent;
+  color: var(--text); font-size: 14px; font-weight: 500; letter-spacing: 0.007em;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 0 6px;
+}
+[data-platform="android"] .segmented button + button { border-left: 1px solid var(--outline); }
+[data-platform="android"] .segmented button[aria-checked="true"] {
+  background: var(--tonal); color: var(--on-tonal);
+}
+[data-platform="android"] .segmented button[aria-checked="true"]::before {
+  content: ""; width: 12px; height: 6px; margin: -4px 2px 0 0; flex: none;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+}
+@media (max-width: 380px) {
+  [data-platform="android"] .segmented button { font-size: 13px; padding: 0 2px; }
+}
+
+/* Settings rows with Material switches on the right. */
+[data-platform="android"] .check {
+  flex-direction: row-reverse; justify-content: space-between; align-items: center;
+  gap: 16px; padding: 12px 0;
+}
+[data-platform="android"] .check small { font-size: 14px; margin-top: 2px; letter-spacing: 0.018em; }
+[data-platform="android"] .check input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; flex: none;
+  width: 52px; height: 32px; margin: 0; border-radius: 16px;
+  background: var(--surface-2); border: 2px solid var(--outline);
+  position: relative; cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+[data-platform="android"] .check input[type="checkbox"]::before {
+  content: ""; position: absolute; top: 6px; left: 6px; width: 16px; height: 16px;
+  border-radius: 50%; background: var(--outline);
+  transition: all 0.15s cubic-bezier(0.2, 0, 0, 1);
+}
+[data-platform="android"] .check input[type="checkbox"]:checked {
+  background: var(--accent); border-color: var(--accent);
+}
+[data-platform="android"] .check input[type="checkbox"]:checked::before {
+  top: 2px; left: 22px; width: 24px; height: 24px; background: var(--accent-ink);
+}
+
+/* Filled text fields and menus. */
+[data-platform="android"] .field { font-size: 12px; color: var(--muted); letter-spacing: 0.033em; }
+[data-platform="android"] .field input, [data-platform="android"] .field select {
+  min-height: 56px; border: 0; border-bottom: 1px solid var(--muted);
+  border-radius: 4px 4px 0 0; background: var(--surface-2); color: var(--text);
+  font-size: 16px; letter-spacing: 0.031em; padding: 0 16px;
+}
+[data-platform="android"] .field input:focus, [data-platform="android"] .field select:focus {
+  outline: none; border-bottom: 2px solid var(--accent);
+}
+
+[data-platform="android"] details { border-top: 1px solid var(--line); }
+[data-platform="android"] summary {
+  list-style: none; justify-content: space-between; min-height: 48px; font-weight: 500;
+}
+[data-platform="android"] summary::-webkit-details-marker { display: none; }
+[data-platform="android"] summary::after {
+  content: ""; width: 8px; height: 8px; margin-right: 6px;
+  border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg); transition: transform 0.2s;
+}
+[data-platform="android"] details[open] > summary::after { transform: rotate(-135deg); }
+
+/* Linear progress indicator. */
+[data-platform="android"] .progress .bar { height: 4px; border-radius: 2px; background: var(--tonal); }
+[data-platform="android"] .thumb { border-radius: 12px; }
+[data-platform="android"] .thumb[aria-selected="true"] { border-width: 3px; }
+[data-platform="android"] .results li { border-bottom-color: var(--line); }
+[data-platform="android"] footer { font-size: 14px; color: var(--muted); }
+[data-platform="android"] footer strong { color: var(--text); font-weight: 500; }
+[data-platform="android"] .metric .k { font-size: 12px; letter-spacing: 0.033em; }
+[data-platform="android"] .metric .v { font-weight: 500; }
+
+/* Basic dialog: large radius, text-button action at the end. */
+[data-platform="android"] dialog {
+  border: 0; border-radius: 28px; padding: 24px; background: var(--surface-high);
+}
+[data-platform="android"] dialog h2 { font-size: 24px; line-height: 32px; margin-top: 0; }
+[data-platform="android"] dialog form { display: flex; flex-direction: column; }
+[data-platform="android"] dialog .btn {
+  align-self: flex-end; background: transparent; color: var(--accent); padding: 0 12px;
+}
+[data-platform="android"] dialog::backdrop { background: rgba(0, 0, 0, 0.32); }

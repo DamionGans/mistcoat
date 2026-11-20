@@ -15,7 +15,11 @@ store accounts, which only the publisher can set up.
    change them in `packaging/mistcoat.spec`, `mobile/capacitor.config.json`,
    then run `npx cap sync`. They cannot change after a store release.
 3. **Bump the version** in `mistcoat/__init__.py`, `packaging/win_version.txt`,
-   `mobile/package.json`, and the `VERSION` constant in `mobile/www/sw.js`.
+   `mobile/package.json`, the `VERSION` constant in `mobile/www/sw.js`, and
+   add a `<release>` line to `packaging/linux/app.mistcoat.Mistcoat.metainfo.xml`.
+4. **Pick a licence.** There is no LICENSE file yet, so the Linux packages
+   declare the app proprietary (`license:` in `packaging/linux/nfpm.yaml`,
+   `project_license` in the metainfo). Update both once one is chosen.
 
 ## Windows
 
@@ -43,6 +47,25 @@ are set (the certificate must also be imported into the runner's keychain;
 see GitHub's *Installing an Apple certificate on macOS runners* guide).
 
 The CI builds separate Apple Silicon (`arm64`) and Intel (`x86_64`) DMGs.
+
+## Linux
+
+`packaging/linux/build_linux.sh` produces all four formats. CI builds them for
+x86_64 and ARM64 and install-tests each one: the .deb on Ubuntu, the .rpm on
+Fedora and openSUSE, the Flatpak and the AppImage directly. None need signing
+to install. For publishing:
+
+- **.deb / .rpm as downloads:** fine as they are. For a proper apt/dnf
+  repository, sign the repository metadata with a GPG key (`aptly`, or a
+  hosted service such as Cloudsmith or packagecloud).
+- **Flathub:** the `.flatpak` bundle repackages the PyInstaller build, which
+  Flathub does not accept; Flathub builds from source. Submitting needs a
+  manifest that builds the Python dependencies (`flatpak-pip-generator`)
+  against `org.kde.Platform`, which provides Qt, and a pull request to
+  `flathub/flathub`. Flathub verifies the app ID's domain, so
+  `app.mistcoat.Mistcoat` requires owning `mistcoat.app`.
+- **AppImage:** works as a download; optionally list it on AppImageHub.
+- **Snap** is not built. It can be added with a `snapcraft.yaml` if wanted.
 
 ## Android
 

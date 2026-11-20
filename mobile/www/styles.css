@@ -133,7 +133,7 @@ h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; colo
 .spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .viewer-tools { display: flex; gap: 8px; margin-top: 8px; }
-.viewer-tools .btn { flex: 1; }
+.viewer-tools .btn { flex: 1; white-space: nowrap; padding: 0 10px; }
 .note { font-size: 0.85rem; color: var(--warn); margin: 8px 2px 0; }
 
 /* Metrics */

@@ -218,7 +218,7 @@ function setupViewer() {
   $("zoom").addEventListener("click", () => {
     const z = v.classList.toggle("zoomed");
     $("zoom").setAttribute("aria-pressed", String(z));
-    $("zoom").textContent = z ? "Fit to screen" : "View 1:1";
+    $("zoom").textContent = cmd(z ? "Fit to screen" : "View 1:1");
     // In 1:1 the wipe is replaced by "hold to compare" - easier on a phone.
     $("after").style.clipPath = z ? "none" : "";
     if (!z) applySplit();
@@ -296,7 +296,7 @@ function syncControls() {
 
 function updateGoLabel() {
   const n = state.files.length;
-  $("go").textContent = n > 1 ? `Protect and save ${n} images` : "Protect and save";
+  $("go").textContent = cmd(n > 1 ? `Protect and save ${n} images` : "Protect and save");
 }
 
 // ------------------------------------------------------------------ export
@@ -333,7 +333,7 @@ async function runBatch() {
       const save = document.createElement("button");
       save.className = "btn";
       save.type = "button";
-      save.textContent = canShareFiles() ? "Share" : "Save";
+      save.textContent = cmd(canShareFiles() ? "Share" : "Save");
       save.addEventListener("click", () => saveOutputs([out]));
       li.append(save);
     } catch (err) {
@@ -412,6 +412,38 @@ function showError(message) {
   $("imgnote").textContent = message;
 }
 
+// ------------------------------------------------------------ platform
+
+// Button wording in the platform's convention (title case on iOS).
+function cmd(text) {
+  return window.mistcoatPlatform ? window.mistcoatPlatform.command(text) : text;
+}
+
+function setupPlatformChrome() {
+  // Static button labels in the HTML: rewrite their text, keep their inputs.
+  for (const el of document.querySelectorAll(".btn, .viewer-tools button")) {
+    for (const node of el.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim()) {
+        node.nodeValue = node.nodeValue.replace(node.nodeValue.trim(), cmd(node.nodeValue.trim()));
+      }
+    }
+  }
+  // Browser / status bar colour matches the page background, as native
+  // apps' bars do, and follows light/dark switches.
+  const sync = () => {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    for (const m of document.querySelectorAll('meta[name="theme-color"]')) m.remove();
+    const meta = document.createElement("meta");
+    meta.name = "theme-color";
+    meta.content = bg;
+    document.head.append(meta);
+  };
+  sync();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", sync);
+  const bar = document.querySelector(".top");
+  addEventListener("scroll", () => bar.classList.toggle("scrolled", scrollY > 4), { passive: true });
+}
+
 function setupInputs() {
   for (const id of ["picker", "picker-more"]) {
     $(id).addEventListener("change", (ev) => { addFiles(ev.target.files); ev.target.value = ""; });
@@ -430,6 +462,7 @@ function setupInputs() {
 setupInputs();
 setupViewer();
 setupControls();
+setupPlatformChrome();
 
 if ("serviceWorker" in navigator && !native() && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch(() => { /* offline support is optional */ });
