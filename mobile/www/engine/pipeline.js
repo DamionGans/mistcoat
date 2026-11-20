@@ -49,12 +49,14 @@ async function harden(original, prot, w, h, settings, ceiling, codec, base, prog
   if (targetRms < 1e-9) return prot;
   const rNorm = targetRms * Math.sqrt(n);
 
+  // Say so now: these first encodes are already hardening work (they used to
+  // show up under the previous pass's label).
+  const [lo, hi] = span;
+  progress("Hardening against re-compression", lo);
   const baseDecoded = [];
   const usable = [];
-  for (const fn of transforms) {
-    const bd = await fn(base, w, h);
-    if (bd) { baseDecoded.push(bd); usable.push(fn); }
-  }
+  const firsts = await Promise.all(transforms.map((fn) => fn(base, w, h)));
+  firsts.forEach((bd, i) => { if (bd) { baseDecoded.push(bd); usable.push(transforms[i]); } });
   if (!usable.length) return prot;
 
   const encodeAll = async (img) => Promise.all(usable.map((fn) => fn(img, w, h)));
@@ -76,7 +78,6 @@ async function harden(original, prot, w, h, settings, ceiling, codec, base, prog
   let current = prot;
   let decoded = await encodeAll(current);
   let best = current, bestScore = score(current, decoded);
-  const [lo, hi] = span;
   const iters = Math.max(1, settings.hardenIterations);
   for (let it = 0; it < iters; it++) {
     progress("Hardening against re-compression", lo + ((hi - lo) * it) / iters);

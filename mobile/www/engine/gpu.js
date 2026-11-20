@@ -97,48 +97,61 @@ export async function gpuStatus() {
  * which case the caller falls back to the CPU.
  */
 export async function gpuBlur(src, w, h, radius) {
+  const out = await gpuBlurMany(src, w, h, [radius]);
+  return out && out[0];
+}
+
+/**
+ * The same image blurred at several radii in one GPU round trip: uploaded
+ * once, read back once. Used for the noise fields, which need two blurs of
+ * the same noise (a difference of Gaussians).
+ */
+export async function gpuBlurMany(src, w, h, radii) {
   if (!enabled || w * h < MIN_PIXELS) return null;
   const g = await ensure();
   if (!g || w * h * 4 > g.maxBinding) return null;
   const { device, pipeline } = g;
-  const rx = Math.min(radius, Math.max(w - 1, 1)), ry = Math.min(radius, Math.max(h - 1, 1));
   const bytes = w * h * 4;
   const STORAGE = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC | GPUBufferUsage.COPY_DST;
   const bufs = [];
+  const buffer = (size, usage) => { const x = device.createBuffer({ size, usage }); bufs.push(x); return x; };
   try {
-    const a = device.createBuffer({ size: bytes, usage: STORAGE });
-    const b = device.createBuffer({ size: bytes, usage: STORAGE });
-    const read = device.createBuffer({ size: bytes, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-    bufs.push(a, b, read);
-    device.queue.writeBuffer(a, 0, src instanceof Float32Array ? src : Float32Array.from(src));
-    const uniforms = [[ry, 0], [rx, 1]].map(([r, horizontal]) => {
-      const u = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-      device.queue.writeBuffer(u, 0, new Uint32Array([w, h, r, horizontal]));
-      bufs.push(u);
-      return u;
-    });
+    const orig = buffer(bytes, STORAGE);
+    const a = buffer(bytes, STORAGE);
+    const b = buffer(bytes, STORAGE);
+    const read = buffer(bytes * radii.length, GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST);
+    device.queue.writeBuffer(orig, 0, src instanceof Float32Array ? src : Float32Array.from(src));
     const layout = pipeline.getBindGroupLayout(0);
     const group = (u, s, d) => device.createBindGroup({ layout, entries: [
       { binding: 0, resource: { buffer: u } },
       { binding: 1, resource: { buffer: s } },
       { binding: 2, resource: { buffer: d } }] });
-    const groups = uniforms.map((u) => [group(u, a, b), group(u, b, a)]);
 
     const enc = device.createCommandEncoder();
-    let inA = true;
-    // Three vertical passes, then three horizontal - as on the CPU.
-    for (const axis of [0, 0, 0, 1, 1, 1]) {
-      const pass = enc.beginComputePass();
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, groups[axis][inA ? 0 : 1]);
-      pass.dispatchWorkgroups(Math.ceil(w / 16), Math.ceil(h / 16));
-      pass.end();
-      inA = !inA;
-    }
-    enc.copyBufferToBuffer(inA ? a : b, 0, read, 0, bytes);
+    radii.forEach((radius, k) => {
+      const rx = Math.min(radius, Math.max(w - 1, 1)), ry = Math.min(radius, Math.max(h - 1, 1));
+      const groups = [[ry, 0], [rx, 1]].map(([r, horizontal]) => {
+        const u = buffer(16, GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST);
+        device.queue.writeBuffer(u, 0, new Uint32Array([w, h, r, horizontal]));
+        return [group(u, a, b), group(u, b, a)];
+      });
+      enc.copyBufferToBuffer(orig, 0, a, 0, bytes);
+      let inA = true;
+      // Three vertical passes, then three horizontal - as on the CPU.
+      for (const axis of [0, 0, 0, 1, 1, 1]) {
+        const pass = enc.beginComputePass();
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, groups[axis][inA ? 0 : 1]);
+        pass.dispatchWorkgroups(Math.ceil(w / 16), Math.ceil(h / 16));
+        pass.end();
+        inA = !inA;
+      }
+      enc.copyBufferToBuffer(inA ? a : b, 0, read, k * bytes, bytes);
+    });
     device.queue.submit([enc.finish()]);
     await read.mapAsync(GPUMapMode.READ);
-    const out = new Float32Array(read.getMappedRange().slice(0));
+    const all = read.getMappedRange();
+    const out = radii.map((_r, k) => new Float32Array(all.slice(k * bytes, (k + 1) * bytes)));
     read.unmap();
     return out;
   } catch (err) {

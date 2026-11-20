@@ -3,7 +3,7 @@
 // Images are interleaved RGB Float32Arrays (length w*h*3, values 0..1), the
 // same layout numpy uses for an (H, W, 3) array. Single channels are
 // Float32Arrays of length w*h.
-import { gpuBlur } from "./gpu.js";
+import { gpuBlur, gpuBlurMany } from "./gpu.js";
 
 export function clamp01(v) {
   return v < 0 ? 0 : v > 1 ? 1 : v;
@@ -15,16 +15,34 @@ export function clip(v, lo, hi) {
 
 // ------------------------------------------------------------------ blur
 
+// Both passes are running sums with clamped edges. They are written for
+// speed on phones without WebGPU, but every value is produced by the same
+// arithmetic in the same order as the straightforward version, so results
+// are bit-identical to it.
+
 function boxH(src, dst, w, h, r) {
   const rr = Math.min(r, Math.max(w - 1, 1));
   const width = 2 * rr + 1;
+  const last = w - 1;
   for (let y = 0; y < h; y++) {
     const row = y * w;
     let sum = 0;
-    for (let k = -rr; k <= rr; k++) sum += src[row + clip(k, 0, w - 1)];
+    for (let k = -rr; k <= rr; k++) sum += src[row + clip(k, 0, last)];
     dst[row] = sum / width;
-    for (let x = 1; x < w; x++) {
-      sum += src[row + Math.min(x + rr, w - 1)] - src[row + Math.max(x - rr - 1, 0)];
+    // Split into edge and interior runs so the interior needs no clamping.
+    const leftEnd = Math.min(rr + 1, w);          // x - rr - 1 < 0 below this
+    const rightStart = Math.max(w - rr, leftEnd);  // x + rr > last from here
+    let x = 1;
+    for (; x < leftEnd; x++) {
+      sum += src[row + Math.min(x + rr, last)] - src[row];
+      dst[row + x] = sum / width;
+    }
+    for (; x < rightStart; x++) {
+      sum += src[row + x + rr] - src[row + x - rr - 1];
+      dst[row + x] = sum / width;
+    }
+    for (; x < w; x++) {
+      sum += src[row + last] - src[row + Math.max(x - rr - 1, 0)];
       dst[row + x] = sum / width;
     }
   }
@@ -33,13 +51,19 @@ function boxH(src, dst, w, h, r) {
 function boxV(src, dst, w, h, r) {
   const rr = Math.min(r, Math.max(h - 1, 1));
   const width = 2 * rr + 1;
-  for (let x = 0; x < w; x++) {
-    let sum = 0;
-    for (let k = -rr; k <= rr; k++) sum += src[clip(k, 0, h - 1) * w + x];
-    dst[x] = sum / width;
-    for (let y = 1; y < h; y++) {
-      sum += src[Math.min(y + rr, h - 1) * w + x] - src[Math.max(y - rr - 1, 0) * w + x];
-      dst[y * w + x] = sum / width;
+  // One running sum per column, advanced a whole row at a time: memory is
+  // read in order instead of striding a full row per step.
+  const sums = new Float64Array(w);
+  for (let k = -rr; k <= rr; k++) {
+    const off = clip(k, 0, h - 1) * w;
+    for (let x = 0; x < w; x++) sums[x] += src[off + x];
+  }
+  for (let x = 0; x < w; x++) dst[x] = sums[x] / width;
+  for (let y = 1; y < h; y++) {
+    const add = Math.min(y + rr, h - 1) * w, sub = Math.max(y - rr - 1, 0) * w, row = y * w;
+    for (let x = 0; x < w; x++) {
+      sums[x] += src[add + x] - src[sub + x];
+      dst[row + x] = sums[x] / width;
     }
   }
 }
@@ -65,6 +89,15 @@ export async function blurFast(src, w, h, sigma) {
     if (out) return out;
   }
   return blur(src, w, h, sigma);
+}
+
+/** The same array blurred at several sigmas; one GPU round trip when possible. */
+export async function blurFastMany(src, w, h, sigmas) {
+  if (sigmas.every((s) => s > 0.01)) {
+    const out = await gpuBlurMany(src, w, h, sigmas.map((s) => Math.max(1, Math.round(s * 0.886))));
+    if (out) return out;
+  }
+  return sigmas.map((s) => blur(src, w, h, s));
 }
 
 // --------------------------------------------------------------- analysis

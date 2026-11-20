@@ -37,7 +37,7 @@ jobs:
         run: |
           python -m venv .venv
           ./packaging/windows/build.ps1
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: Mistcoat-windows-x64
           path: desktop/dist/Mistcoat.exe
@@ -65,7 +65,7 @@ jobs:
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
           MAC_NOTARY_PROFILE: ${{ secrets.MAC_NOTARY_PROFILE }}
         run: ./packaging/macos/build.sh
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: Mistcoat-macos-${{ matrix.arch }}
           path: desktop/dist/*.dmg
@@ -148,7 +148,7 @@ jobs:
             --selftest "$HOME/flatpak-selftest.json"
           cat "$HOME/flatpak-selftest.json"
           grep '"ok": true' "$HOME/flatpak-selftest.json"
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: Mistcoat-linux-${{ matrix.arch }}
           path: |

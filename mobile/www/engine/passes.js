@@ -4,7 +4,7 @@
 // measured cost, not bit for bit.
 
 import {
-  blurFast, clamp01, clip, dct8, idct8, JPEG_Q50_LUMA, localActivity, luminance,
+  blurFast, blurFastMany, clamp01, clip, dct8, idct8, JPEG_Q50_LUMA, localActivity, luminance,
   percentile, rgbToYcc, std, warp, yccToRgb,
 } from "./imaging.js";
 
@@ -38,9 +38,44 @@ export function makeRng(seed) {
       spare = m * Math.sin(2 * Math.PI * v);
       return m * Math.cos(2 * Math.PI * v);
     },
+    /** n standard normals: the exact sequence repeated normal() calls give,
+     * with the generator inlined - this is the hot loop of the noise passes
+     * (tens of millions of draws per photo), several times faster. */
     normals(n) {
       const out = new Float32Array(n);
-      for (let i = 0; i < n; i++) out[i] = this.normal();
+      let i = 0;
+      if (spare !== null && n > 0) { out[i++] = spare; spare = null; }
+      let A = a >>> 0, B = b >>> 0, C = c >>> 0, D = d >>> 0;
+      const TWO_PI = 2 * Math.PI;
+      while (i < n) {
+        let u = 0, v = 0;
+        do {                                   // same rejection as normal()
+          const t = (A + B) | 0;
+          A = (B ^ (B >>> 9)) >>> 0;
+          B = (C + (C << 3)) >>> 0;
+          C = ((C << 21) | (C >>> 11)) >>> 0;
+          D = (D + 1) >>> 0;
+          const r = (t + D) | 0;
+          C = (C + r) >>> 0;
+          u = (r >>> 0) / 4294967296;
+        } while (u <= 1e-12);
+        {
+          const t = (A + B) | 0;
+          A = (B ^ (B >>> 9)) >>> 0;
+          B = (C + (C << 3)) >>> 0;
+          C = ((C << 21) | (C >>> 11)) >>> 0;
+          D = (D + 1) >>> 0;
+          const r = (t + D) | 0;
+          C = (C + r) >>> 0;
+          v = (r >>> 0) / 4294967296;
+        }
+        const m = Math.sqrt(-2 * Math.log(u));
+        const ang = TWO_PI * v;
+        out[i++] = m * Math.cos(ang);
+        if (i < n) out[i++] = m * Math.sin(ang);
+        else spare = m * Math.sin(ang);
+      }
+      a = A; b = B; c = C; d = D;
       return out;
     },
   };
@@ -87,8 +122,7 @@ export class PassContext {
 /** Noise with energy between two blur scales (difference of gaussians). */
 export async function bandNoise(w, h, rng, inner, outer) {
   const n = rng.normals(w * h);
-  const lo = await blurFast(n, w, h, inner);
-  const hi = await blurFast(n, w, h, outer);
+  const [lo, hi] = await blurFastMany(n, w, h, [inner, outer]);
   for (let i = 0; i < lo.length; i++) lo[i] -= hi[i];
   const s = std(lo);
   if (s > 1e-8) for (let i = 0; i < lo.length; i++) lo[i] /= s;
