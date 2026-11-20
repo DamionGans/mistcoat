@@ -353,12 +353,23 @@ async function runBatch() {
       const m = r.metrics;
       li.querySelector(".name").innerHTML = `${escapeHtml(name)}<span class="meta">` +
         `${r.w}×${r.h} · ${m.psnr.toFixed(1)} dB · ${Math.round(m.survival * 100)}% durable · ${r.seconds.toFixed(1)}s</span>`;
+      const acts = document.createElement("span");
+      acts.className = "acts";
       const save = document.createElement("button");
       save.className = "btn";
       save.type = "button";
-      save.textContent = cmd(canShareFiles() ? "Share" : "Save");
-      save.addEventListener("click", () => saveOutputs([out]));
-      li.append(save);
+      save.textContent = cmd("Save…");
+      save.addEventListener("click", () => saveOutputs([out], { ask: true }));
+      acts.append(save);
+      if (canShareFiles()) {
+        const share = document.createElement("button");
+        share.className = "btn ghost";
+        share.type = "button";
+        share.textContent = cmd("Share");
+        share.addEventListener("click", () => shareOutputs([out]));
+        acts.append(share);
+      }
+      li.append(acts);
     } catch (err) {
       li.querySelector(".meta").textContent = `Failed: ${err.message}`;
       li.querySelector(".meta").classList.add("err");
@@ -368,7 +379,11 @@ async function runBatch() {
   $("save-all").hidden = state.outputs.length < 2;
   $("go").disabled = false;
   state.busy = false;
-  if (state.outputs.length === 1) saveOutputs(state.outputs).catch(() => {});
+  // Save straight away where the user said to; with "ask", only open the
+  // picker by itself for a single image (a batch waits for "Save all").
+  if (state.outputs.length && (state.settings.saveTo !== "ask" || state.outputs.length === 1)) {
+    saveOutputs(state.outputs);
+  }
 }
 
 function setProgress(frac, text) {
@@ -395,33 +410,188 @@ function toBase64(bytes) {
   return btoa(s);
 }
 
-async function saveOutputs(outs) {
+// Where protected copies go. Native apps use the system pickers through the
+// app's MistcoatFiles plugin (see android/.../MistcoatFilesPlugin.java and
+// ios/App/App/MistcoatFiles.swift); browsers use the File System Access API
+// where it exists, otherwise an ordinary download.
+
+const filesPlugin = () => window.Capacitor?.Plugins?.MistcoatFiles;
+const platformName = () => window.mistcoatPlatform?.name ?? "web";
+let webFolder = null;      // a FileSystemDirectoryHandle, for this session only
+
+/** Which "save to" choices this device can offer. */
+function saveCapabilities() {
   if (native()) {
-    // Capacitor: write to the app cache, then hand the files to the system
-    // share sheet (Save to Photos / Files / Drive / AirDrop ...).
-    const { Filesystem, Share } = window.Capacitor.Plugins;
-    const uris = [];
-    for (const o of outs) {
-      const r = await Filesystem.writeFile({ path: o.name, data: toBase64(o.bytes), directory: "CACHE" });
-      uris.push(r.uri);
+    return { gallery: true, folder: platformName() === "android" };
+  }
+  return { gallery: false, folder: "showDirectoryPicker" in window };
+}
+
+async function writeToCache(outs) {
+  const { Filesystem } = window.Capacitor.Plugins;
+  const files = [];
+  for (const o of outs) {
+    const r = await Filesystem.writeFile({ path: o.name, data: toBase64(o.bytes), directory: "CACHE" });
+    files.push({ path: r.uri, name: o.name, mime: o.mime });
+  }
+  return files;
+}
+
+function showSaveNote(text, isError = false) {
+  const el = $("save-note");
+  el.hidden = !text;
+  el.textContent = text || "";
+  el.classList.toggle("err", isError);
+}
+
+/**
+ * Save ``outs``. ``ask`` forces a location picker regardless of the setting
+ * (the per-image "Save…" button).
+ */
+async function saveOutputs(outs, { ask = false } = {}) {
+  const mode = ask ? "ask" : state.settings.saveTo;
+  const n = outs.length, what = n === 1 ? outs[0].name : `${n} images`;
+  try {
+    let where;
+    if (native()) {
+      const plugin = filesPlugin();
+      if (!plugin) throw new Error("Saving is not available in this build");
+      const files = await writeToCache(outs);
+      if (mode === "gallery") {
+        where = (await plugin.saveToGallery({ files })).location;
+      } else if (mode === "folder" && state.settings.saveFolder) {
+        try {
+          where = (await plugin.saveToFolder({ folder: state.settings.saveFolder.id, files })).location;
+        } catch (err) {
+          if (err.code !== "NO_ACCESS") throw err;
+          state.settings.saveFolder = null; saveSettings(); syncSaveControls();
+          throw new Error("Access to the chosen folder was lost. Choose it again under Advanced.");
+        }
+      } else if (n === 1) {
+        where = (await plugin.saveAs({ file: files[0] })).location;   // name + place
+      } else if (platformName() === "android") {
+        const picked = await plugin.pickFolder();                      // one folder for all
+        where = (await plugin.saveToFolder({ folder: picked.folder, files })).location;
+      } else {
+        where = (await plugin.saveToFolder({ files })).location;       // iOS export picker
+      }
+    } else {
+      where = await saveInBrowser(outs, mode);
     }
-    await Share.share({ title: "Protected artwork", files: uris });
-    return;
+    if (where) showSaveNote(`Saved ${what} to ${where}.`);
+  } catch (err) {
+    if (err?.code === "CANCELLED" || err?.name === "AbortError") return;
+    showSaveNote(`Could not save: ${err.message || err}`, true);
   }
-  const files = outs.map((o) => new File([o.bytes], o.name, { type: o.mime }));
-  if (canShareFiles() && navigator.canShare({ files })) {
-    try { await navigator.share({ files, title: "Protected artwork" }); return; }
-    catch (err) { if (err.name === "AbortError") return; }
+}
+
+async function saveInBrowser(outs, mode) {
+  if (mode === "folder" && webFolder) {
+    try {
+      for (const o of outs) await writeHandle(await uniqueFile(webFolder, o.name), o);
+      return webFolder.name;
+    } catch (err) {
+      if (err.name !== "NotAllowedError") throw err;
+      webFolder = null; syncSaveControls();
+    }
   }
-  for (const f of files) {
+  if (outs.length === 1 && "showSaveFilePicker" in window) {
+    const o = outs[0];
+    const ext = o.name.split(".").pop();
+    const handle = await showSaveFilePicker({
+      suggestedName: o.name,
+      types: [{ description: "Image", accept: { [o.mime]: [`.${ext}`] } }],
+    });
+    await writeHandle(handle, o);
+    return handle.name;
+  }
+  if (outs.length > 1 && "showDirectoryPicker" in window) {
+    const dir = await showDirectoryPicker({ mode: "readwrite", startIn: "pictures" });
+    for (const o of outs) await writeHandle(await uniqueFile(dir, o.name), o);
+    return dir.name;
+  }
+  // Plain download: the browser's own "save as" or downloads folder.
+  for (const o of outs) {
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(f);
-    a.download = f.name;
+    a.href = URL.createObjectURL(new File([o.bytes], o.name, { type: o.mime }));
+    a.download = o.name;
     document.body.append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
   }
+  return "your downloads";
+}
+
+async function writeHandle(handle, o) {
+  const w = await handle.createWritable();
+  await w.write(o.bytes);
+  await w.close();
+}
+
+/** A file in ``dir`` that does not overwrite anything: name, name (2), ... */
+async function uniqueFile(dir, name) {
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : "";
+  for (let i = 1; i < 1000; i++) {
+    const candidate = i === 1 ? name : `${stem} (${i})${ext}`;
+    try { await dir.getFileHandle(candidate); } catch { return dir.getFileHandle(candidate, { create: true }); }
+  }
+  throw new Error("Too many files with that name");
+}
+
+async function shareOutputs(outs) {
+  try {
+    if (native()) {
+      const files = await writeToCache(outs);
+      await window.Capacitor.Plugins.Share.share({ title: "Protected artwork", files: files.map((f) => f.path) });
+      return;
+    }
+    await navigator.share({ files: outs.map((o) => new File([o.bytes], o.name, { type: o.mime })), title: "Protected artwork" });
+  } catch (err) {
+    if (err?.name !== "AbortError" && !/cancel/i.test(String(err?.message))) showSaveNote(`Could not share: ${err.message || err}`, true);
+  }
+}
+
+async function chooseFolder() {
+  try {
+    if (native()) {
+      const picked = await filesPlugin().pickFolder();
+      state.settings.saveFolder = { id: picked.folder, name: picked.name };
+    } else {
+      webFolder = await showDirectoryPicker({ mode: "readwrite", startIn: "pictures" });
+      state.settings.saveFolder = { id: "web", name: webFolder.name };
+    }
+    state.settings.saveTo = "folder";
+    saveSettings();
+  } catch (err) {
+    if (err?.code !== "CANCELLED" && err?.name !== "AbortError") showSaveNote(`Could not use that folder: ${err.message || err}`, true);
+  }
+  syncSaveControls();
+}
+
+function syncSaveControls() {
+  const caps = saveCapabilities();
+  const sel = $("save-to");
+  for (const opt of sel.options) {
+    if (opt.hasAttribute("data-native")) {
+      opt.hidden = opt.disabled = !caps.gallery;
+      opt.textContent = platformName() === "android" ? "Gallery (Pictures/Mistcoat)" : "Photos";
+    }
+    if (opt.hasAttribute("data-folder")) opt.hidden = opt.disabled = !caps.folder;
+  }
+  let mode = state.settings.saveTo;
+  if ((mode === "gallery" && !caps.gallery) || (mode === "folder" && !caps.folder)) mode = "ask";
+  // A browser folder is only remembered for the session.
+  if (!native() && mode === "folder" && !webFolder) state.settings.saveFolder = null;
+  sel.value = mode;
+  const folder = mode === "folder";
+  $("folder-row").hidden = !folder;
+  $("folder-name").textContent = state.settings.saveFolder?.name
+    ? `Folder: ${state.settings.saveFolder.name}` : "No folder chosen yet";
+  $("save-all").textContent = cmd(mode === "gallery"
+    ? (platformName() === "android" ? "Save all to Gallery" : "Save all to Photos")
+    : folder && state.settings.saveFolder ? `Save all to ${state.settings.saveFolder.name}` : "Save all…");
 }
 
 // --------------------------------------------------------------------- misc
@@ -479,6 +649,13 @@ function setupInputs() {
   document.addEventListener("drop", (ev) => { ev.preventDefault(); addFiles(ev.dataTransfer.files); });
   $("go").addEventListener("click", runBatch);
   $("save-all").addEventListener("click", () => saveOutputs(state.outputs));
+  $("save-to").addEventListener("change", (ev) => {
+    state.settings.saveTo = ev.target.value;
+    saveSettings();
+    if (ev.target.value === "folder" && !state.settings.saveFolder) chooseFolder();
+    syncSaveControls();
+  });
+  $("choose-folder").addEventListener("click", chooseFolder);
   $("about").addEventListener("click", () => $("about-dialog").showModal());
 }
 
@@ -486,6 +663,7 @@ setupInputs();
 setupViewer();
 setupControls();
 setupPlatformChrome();
+syncSaveControls();
 
 if ("serviceWorker" in navigator && !native() && location.protocol !== "file:") {
   navigator.serviceWorker.register("sw.js").catch(() => { /* offline support is optional */ });

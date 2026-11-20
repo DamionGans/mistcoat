@@ -194,6 +194,9 @@ legend { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; let
 .results .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .results .meta { display: block; font-size: 0.78rem; color: var(--muted); }
 .results .err { color: var(--warn); }
+.results .acts { display: flex; gap: 6px; flex: none; }
+.folder-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -2px 0 10px; }
+.folder-row .muted { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 footer { padding-top: 8px; padding-bottom: 28px; font-size: 0.85rem; }
 footer p { margin: 6px 0; }

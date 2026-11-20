@@ -15,6 +15,8 @@ export function defaultSettings() {
     outputFormat: "png", // "png" | "jpeg"
     jpegQuality: 0.95,
     useGpu: true,        // a device preference; never changes the result's strength
+    saveTo: "ask",       // "ask" | "gallery" | "folder"  (where protected copies go)
+    saveFolder: null,    // { id, name } of the chosen folder, when saveTo is "folder"
   };
 }
 
