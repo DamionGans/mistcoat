@@ -85,19 +85,25 @@ another.
 
 **Phone / tablet:** tap **Choose images** (or photograph a physical piece),
 pick a level, check the preview (*Hold to compare*, *View 1:1*), then
-**Protect and save**. The system share sheet opens, from which you can save
-to Photos or Files, AirDrop, or send to Drive.
+**Protect and save**. You choose where it goes: any folder (the system's own
+save picker), Photos / the gallery, or a folder you set once under
+*Advanced*; **Share** sends it to another app instead.
 
-**Command line** (batch over a whole portfolio; installed with the desktop
-package, see Development):
+**Command line and add-ons:** everything also runs headless, without a
+window (and on Windows without a console flashing up), with JSON output for
+other programs:
 
 ```powershell
 mistcoat protect "D:\Art\2026" -o "D:\Art\2026-protected" --preset strong
 ```
 
 ```powershell
-mistcoat report piece.png --preset balanced
+mistcoat protect piece.png --output-file piece-safe.png --json
 ```
+
+The app can also be opened with files (or a list file) already in its queue,
+and a second launch hands its files to the open window. See
+[docs/CLI.md](docs/CLI.md) for using Mistcoat from an art-management program.
 
 ---
 

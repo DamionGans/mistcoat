@@ -181,10 +181,16 @@ def protect(img: LoadedImage, settings: Settings, *,
                   time.perf_counter() - started)
 
 
-def protect_file(path: str | Path, out_dir: str | Path, settings: Settings, *,
+def protect_file(path: str | Path, out_dir: str | Path | None, settings: Settings, *,
                  progress: Progress | None = None,
-                 measure: bool = True) -> Result:
-    """Load, protect and save one file. Returns the result with ``saved_to`` set."""
+                 measure: bool = True,
+                 dest: str | Path | None = None) -> Result:
+    """Load, protect and save one file. Returns the result with ``saved_to`` set.
+
+    The output goes to ``dest`` when given (its extension picks the format
+    unless ``settings.output_format`` says otherwise), else into ``out_dir``
+    named after the source with ``settings.filename_suffix``.
+    """
     img = imaging.load_image(path)
     result = protect(img, settings, progress=progress, measure=measure)
 
@@ -193,9 +199,15 @@ def protect_file(path: str | Path, out_dir: str | Path, settings: Settings, *,
         credit=settings.credit,
         copyright_notice=settings.copyright_notice,
     )
-    fmt = output.resolve_format(img, settings.output_format)
-    dest = output.target_path(Path(path), Path(out_dir),
-                              settings.filename_suffix, settings.output_format)
+    requested = settings.output_format
+    if dest is not None:
+        dest = Path(dest)
+        if requested == "source":
+            requested = output.format_for_suffix(dest.suffix) or "source"
+    fmt = output.resolve_format(img, requested)
+    if dest is None:
+        dest = output.target_path(Path(path), Path(out_dir),
+                                  settings.filename_suffix, settings.output_format)
     result.saved_to = output.save_image(img, result.rgb, dest, fmt, opts,
                                         jpeg_quality=settings.jpeg_quality)
     return result

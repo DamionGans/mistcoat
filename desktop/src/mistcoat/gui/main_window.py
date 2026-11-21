@@ -536,6 +536,27 @@ class MainWindow(QMainWindow):
         if added:
             self.status.setText(f"{len(self.paths)} image(s) ready.")
 
+    def queue_paths(self, paths: list[Path], problems: list[str] | None = None) -> None:
+        """Queue files handed over at start-up or by a later launch, and say
+        how many made it in."""
+        before = len(self.paths)
+        usable = [p for p in paths if p.is_dir() or (
+            p.is_file() and p.suffix.lower() in imaging.SUPPORTED_SUFFIXES)]
+        self._add_paths(usable)
+        added = len(self.paths) - before
+        skipped = len(paths) - len(usable)
+        parts = [f"Added {added} image(s); {len(self.paths)} in the queue."]
+        if skipped:
+            parts.append(f"Skipped {skipped} that were missing or not images.")
+        parts.extend(problems or [])
+        self.status.setText(" ".join(parts))
+
+    def bring_to_front(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
+
     def _append(self, paths: list[Path]) -> int:
         count = 0
         for path in paths:

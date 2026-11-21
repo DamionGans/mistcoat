@@ -77,6 +77,17 @@ fi
 dist/Mistcoat/Mistcoat --selftest dist/selftest.json
 cat dist/selftest.json
 
+# Headless command line from the packaged app, as an add-on host would use it.
+CLI_TMP=$(mktemp -d)
+"dist/Mistcoat/Mistcoat" protect ../samples/test_painting.png --output-file "$CLI_TMP/out.png" \
+  --json --quick > "$CLI_TMP/result.json"
+cat "$CLI_TMP/result.json"
+grep -q '"ok": true' "$CLI_TMP/result.json"
+test -s "$CLI_TMP/out.png"
+"dist/Mistcoat/Mistcoat" info --json | grep -q '"ok": true'
+rm -rf "$CLI_TMP"
+echo "Headless CLI: ok"
+
 # 3. Shared files: launcher entry, AppStream metadata, icons at every size.
 SHARE=dist/linux/share
 install -Dm644 packaging/linux/$APP_ID.desktop "$SHARE/applications/$APP_ID.desktop"

@@ -48,11 +48,15 @@ jobs:
           ./packaging/windows/build.ps1
           $arch = & .\.venv\Scripts\python.exe -c "import platform; print(platform.machine())"
           Write-Host "Built for $arch"
-          Rename-Item dist\Mistcoat.exe "Mistcoat-$((& .\.venv\Scripts\python.exe -c 'import mistcoat; print(mistcoat.__version__)'))-windows-${{ matrix.arch }}.exe"
+          $ver = & .\.venv\Scripts\python.exe -c 'import mistcoat; print(mistcoat.__version__)'
+          Rename-Item dist\Mistcoat.exe "Mistcoat-$ver-windows-${{ matrix.arch }}.exe"
+          Rename-Item dist\mistcoat-cli.exe "mistcoat-cli-$ver-windows-${{ matrix.arch }}.exe"
       - uses: actions/upload-artifact@v7
         with:
           name: Mistcoat-windows-${{ matrix.arch }}
-          path: desktop/dist/Mistcoat-*-windows-*.exe
+          path: |
+            desktop/dist/Mistcoat-*-windows-*.exe
+            desktop/dist/mistcoat-cli-*-windows-*.exe
 
   macos:
     needs: test

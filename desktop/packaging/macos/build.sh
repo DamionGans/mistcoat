@@ -36,6 +36,17 @@ codesign --verify --deep --strict "$APP"
 "$APP/Contents/MacOS/Mistcoat" --selftest dist/selftest.json
 cat dist/selftest.json
 
+# Headless command line from the packaged app, as an add-on host would use it.
+CLI_TMP=$(mktemp -d)
+"$APP/Contents/MacOS/Mistcoat" protect ../samples/test_painting.png --output-file "$CLI_TMP/out.png" \
+  --json --quick > "$CLI_TMP/result.json"
+cat "$CLI_TMP/result.json"
+grep -q '"ok": true' "$CLI_TMP/result.json"
+test -s "$CLI_TMP/out.png"
+"$APP/Contents/MacOS/Mistcoat" info --json | grep -q '"ok": true'
+rm -rf "$CLI_TMP"
+echo "Headless CLI: ok"
+
 DMG="dist/Mistcoat-${VERSION}-macos-${ARCH}.dmg"
 STAGE=$(mktemp -d)
 cp -R "$APP" "$STAGE/"

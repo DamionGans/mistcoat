@@ -1,6 +1,8 @@
 """GUI entry point."""
 from __future__ import annotations
 
+import logging
+import os
 import sys
 
 from PySide6.QtCore import QEvent, Qt
@@ -95,14 +97,42 @@ def _icon_path():
     return path if path.is_file() else None
 
 
+log = logging.getLogger("mistcoat")
+
+
+def _setup_diagnostics() -> None:
+    """MISTCOAT_LOG=<file> makes the windowed app log what it does and any
+    error to that file - it has no console to report to otherwise."""
+    target = os.environ.get("MISTCOAT_LOG")
+    if not target:
+        return
+    logging.basicConfig(filename=target, level=logging.INFO,
+                        format="%(asctime)s %(process)d %(levelname)s %(message)s")
+    previous = sys.excepthook
+
+    def hook(kind, value, tb):
+        log.error("unhandled error", exc_info=(kind, value, tb))
+        previous(kind, value, tb)
+    sys.excepthook = hook
+
+
 def run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     if "--selftest" in argv:
         i = argv.index("--selftest")
         out = argv[i + 1] if i + 1 < len(argv) else "mistcoat-selftest.json"
         return _selftest(out)
+    _setup_diagnostics()
+    from . import handoff
+    request = handoff.parse_open_args(argv)
+    log.info("start: %d path(s) to queue, new_window=%s", len(request.paths), request.new_window)
+
     QApplication.setAttribute(Qt.AA_DontUseNativeMenuBar, False)
     app = MistcoatApplication(argv)
+    # Already open? Queue the files there and bring that window forward.
+    if request.paths and not request.new_window and handoff.send_to_running(request.paths):
+        log.info("handed %d path(s) to the open window", len(request.paths))
+        return 0
     app.setApplicationName(APP_NAME)
     app.setOrganizationName(APP_NAME)
     if sys.platform.startswith("linux"):
@@ -126,10 +156,14 @@ def run(argv: list[str] | None = None) -> int:
     if app._pending:
         from pathlib import Path
         window._add_paths([Path(a) for a in app._pending])
-    # Files passed on the command line (or dropped on the .exe) open straight away.
-    extra = [a for a in argv[1:] if not a.startswith("-")]
-    if extra:
-        from pathlib import Path
-        window._add_paths([Path(a) for a in extra])
+    # Files passed on the command line, in a list file, or dropped on the
+    # executable go straight into the queue.
+    if request.paths or request.problems:
+        window.queue_paths(request.paths, request.problems)
+    # Later launches with files hand them to this window instead.
+    receiver = handoff.Receiver(app)
+    log.info("listening for handoffs: %s (%s)", receiver.server.isListening(),
+             receiver.server.errorString() or "ok")
+    receiver.received.connect(lambda paths: (window.queue_paths(paths), window.bring_to_front()))
     window.show()
     return app.exec()

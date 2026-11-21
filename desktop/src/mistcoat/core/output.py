@@ -123,6 +123,12 @@ def target_path(src: Path, out_dir: Path, suffix: str, fmt: str) -> Path:
     return out_dir / f"{src.stem}{suffix}{ext}"
 
 
+def format_for_suffix(suffix: str) -> str | None:
+    """"png", "jpeg", "webp", "tiff" for a file extension, else None."""
+    fmt = _FORMAT_FOR_SUFFIX.get(suffix.lower())
+    return fmt.lower() if fmt else None
+
+
 def resolve_format(src: LoadedImage, requested: str) -> str:
     if requested and requested != "source":
         return requested.upper()
