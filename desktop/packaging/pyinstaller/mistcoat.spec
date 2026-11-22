@@ -40,7 +40,7 @@ a = Analysis(
     [str(HERE / "launch.py")],
     pathex=[str(SRC)],
     datas=[(str(SRC / "mistcoat" / "resources"), "mistcoat/resources")],
-    hiddenimports=["PIL.ImageCms"],
+    hiddenimports=["PIL.ImageCms", "PIL.ImageWin"],
     excludes=EXCLUDES,
     noarchive=False,
 )
@@ -98,7 +98,7 @@ else:
         cli_a = Analysis(
             [str(HERE / "launch_cli.py")],
             pathex=[str(SRC)],
-            hiddenimports=["PIL.ImageCms"],
+            hiddenimports=["PIL.ImageCms", "PIL.ImageWin"],
             excludes=EXCLUDES + ["PySide6", "shiboken6"],
             noarchive=False,
         )

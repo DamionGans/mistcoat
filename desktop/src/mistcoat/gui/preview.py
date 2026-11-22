@@ -24,8 +24,13 @@ MODE_DIFF = "diff"
 DIFF_GAIN = 14.0
 
 
-def to_qimage(rgb: np.ndarray) -> QImage:
-    arr = np.ascontiguousarray((np.clip(rgb, 0, 1) * 255.0 + 0.5).astype(np.uint8))
+def to_qimage(rgb: np.ndarray, transform=None) -> QImage:
+    """``transform`` (a color.DisplayTransform) converts the image's colours to
+    the monitor's; Qt itself draws pixel values without colour management."""
+    if transform is not None:
+        arr = np.ascontiguousarray(transform.to_display(rgb))
+    else:
+        arr = np.ascontiguousarray((np.clip(rgb, 0, 1) * 255.0 + 0.5).astype(np.uint8))
     h, w = arr.shape[:2]
     return QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888).copy()
 
@@ -47,6 +52,8 @@ class PreviewCanvas(QWidget):
         self._after: QPixmap | None = None
         self._diff: QPixmap | None = None
         self._placeholder = "Drop an image here, or use Add images"
+        self._arrays: tuple[np.ndarray | None, np.ndarray | None] = (None, None)
+        self._transform = None
 
         self.mode = MODE_SPLIT
         self.split = 0.5
@@ -62,13 +69,20 @@ class PreviewCanvas(QWidget):
 
     # ------------------------------------------------------------- content
 
+    def set_color_transform(self, transform) -> None:
+        """How to show the current image's colours on this monitor."""
+        self._transform = transform
+        if self._arrays[0] is not None:
+            self.set_images(*self._arrays)
+
     def set_images(self, before: np.ndarray | None, after: np.ndarray | None) -> None:
+        self._arrays = (before, after)
         if before is None:
             self._before = self._after = self._diff = None
         else:
-            self._before = QPixmap.fromImage(to_qimage(before))
+            self._before = QPixmap.fromImage(to_qimage(before, self._transform))
             if after is not None:
-                self._after = QPixmap.fromImage(to_qimage(after))
+                self._after = QPixmap.fromImage(to_qimage(after, self._transform))
                 d = np.clip((after - before) * DIFF_GAIN + 0.5, 0, 1)
                 self._diff = QPixmap.fromImage(to_qimage(d))
             else:

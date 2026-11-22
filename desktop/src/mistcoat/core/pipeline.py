@@ -24,6 +24,7 @@ class Result:
     seconds: float = 0.0
     saved_to: Path | None = None
     note: str = ""
+    color: dict | None = None       # {"input": "...", "output": "..."} when saved
 
 
 def _noop(_stage: str, _frac: float) -> None:
@@ -208,6 +209,8 @@ def protect_file(path: str | Path, out_dir: str | Path | None, settings: Setting
     if dest is None:
         dest = output.target_path(Path(path), Path(out_dir),
                                   settings.filename_suffix, settings.output_format)
+    result.color = {"input": img.color_summary,
+                    "output": output.describe_output(img, fmt)}
     result.saved_to = output.save_image(img, result.rgb, dest, fmt, opts,
                                         jpeg_quality=settings.jpeg_quality)
     return result

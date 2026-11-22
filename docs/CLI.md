@@ -69,7 +69,7 @@ Global options (before the command): `--gpu` / `--no-gpu`.
 | `--strength 0-100` | override the preset's strength |
 | `--enable PASS` / `--disable PASS` | switch individual passes (see `mistcoat passes`) |
 | `--no-harden` | skip re-compression hardening (faster, less durable) |
-| `--format source\|png\|jpeg\|webp\|tiff` | output format (default: same as the source) |
+| `--format source\|png\|jpeg\|webp\|tiff` | output format (default: same as the source, with the same colour mode, bit depth, ICC profile and resolution) |
 | `--jpeg-quality 70-100` | for JPEG output |
 | `--suffix TEXT` | file-name suffix with `-o` (default `_protected`) |
 | `--credit NAME`, `--copyright TEXT` | embedded in the file's metadata |
@@ -112,6 +112,7 @@ The original image is never overwritten, whatever `--on-exists` says.
       "metrics": {"psnr_db": 39.5, "ssim": 0.99612, "peak_change": 8.0, "mean_change": 1.214,
                   "durability": 0.78, "visibility": "Invisible in normal viewing",
                   "durability_label": "Survives re-compression well"},
+      "color": {"input": "16-bit RGB, Adobe RGB (1998)", "output": "16-bit RGB, Adobe RGB (1998)"},
       "note": null,
       "seconds": 39.2
     }
@@ -120,7 +121,9 @@ The original image is never overwritten, whatever `--on-exists` says.
 }
 ```
 
-`status` is `ok`, `skipped` or `failed` (with `error` set). With `--progress
+`status` is `ok`, `skipped` or `failed` (with `error` set). `color` says
+what the original was and what was written; they differ only when the chosen
+format can't hold the original (CMYK to PNG, or 16-bit to JPEG). With `--progress
 json`, stderr carries lines like
 `{"event": "progress", "index": 1, "total": 3, "file": "piece.png", "stage": "Hardening against re-compression", "fraction": 0.7}`.
 

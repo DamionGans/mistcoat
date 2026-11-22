@@ -27,7 +27,11 @@ function loadSettings() {
   const base = applyPreset(defaultSettings(), DEFAULT_PRESET);
   try {
     const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
-    if (saved) return { ...base, ...saved, enabled: { ...base.enabled, ...saved.enabled } };
+    if (saved) {
+      // Version 2 made "same as the original" the default output format.
+      if ((saved.settingsVersion ?? 1) < 2) { saved.outputFormat = "source"; saved.settingsVersion = 2; }
+      return { ...base, ...saved, enabled: { ...base.enabled, ...saved.enabled } };
+    }
   } catch { /* private mode or blocked storage: defaults are fine */ }
   return base;
 }
@@ -121,7 +125,8 @@ async function select(i) {
   const token = ++state.loadedToken;
   setBusy(true);
   try {
-    const r = await call({ type: "load", file: state.files[i].file, maxPixels: state.maxPixels });
+    const r = await call({ type: "load", file: state.files[i].file, maxPixels: state.maxPixels,
+      display: DISPLAY_SPACE });
     if (token !== state.loadedToken) return;
     $("imgnote").hidden = !r.note;
     $("imgnote").textContent = r.note;
@@ -158,10 +163,22 @@ async function renderPreview() {
   }
 }
 
+// The preview is drawn in Display P3 on screens that show it, so wide-gamut
+// art is not clipped; the worker converts each image's own profile to this.
+const DISPLAY_SPACE = (() => {
+  try {
+    if (!matchMedia("(color-gamut: p3)").matches) return "srgb";
+    const ctx = document.createElement("canvas").getContext("2d", { colorSpace: "display-p3" });
+    return ctx?.getContextAttributes?.().colorSpace === "display-p3" ? "display-p3" : "srgb";
+  } catch { return "srgb"; }
+})();
+
 function drawCanvas(c, rgba, w, h) {
   c.width = w;
   c.height = h;
-  c.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(rgba.buffer ?? rgba), w, h), 0, 0);
+  const data = new Uint8ClampedArray(rgba.buffer ?? rgba);
+  const opts = { colorSpace: DISPLAY_SPACE };
+  c.getContext("2d", opts).putImageData(new ImageData(data, w, h, opts), 0, 0);
 }
 
 function setBusy(on) { $("busy").hidden = !on; }

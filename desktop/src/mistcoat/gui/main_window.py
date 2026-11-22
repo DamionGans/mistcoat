@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, Qt, QTimer, Slot
-from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices,
+from PySide6.QtGui import (QAction, QActionGroup, QDesktopServices, QGuiApplication,
                            QKeySequence)
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog,
                                QFrame, QGridLayout, QGroupBox, QHBoxLayout,
@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFileDialog,
                                QSpinBox, QSplitter, QVBoxLayout, QWidget)
 
 from .. import APP_NAME, __version__
-from ..core import accel, imaging
+from ..core import accel, color, imaging
 from ..core.passes import ALL_PASSES
 from ..core.presets import DEFAULT_PRESET, PRESETS, PRESETS_BY_KEY, Settings
 from . import preview as preview_mod
@@ -49,6 +49,8 @@ class MainWindow(QMainWindow):
         self.paths: list[Path] = []
         self.current_image = None          # LoadedImage
         self.current_preview_rgb = None    # downscaled original
+        self._display_profiles: dict[str, bytes | None] = {}
+        self._screen_hooked = False
         self.out_dir: Path | None = None
 
         self._token = 0
@@ -608,9 +610,11 @@ class MainWindow(QMainWindow):
             return
         self.current_image = img
         self.current_preview_rgb = small
+        self._update_color_transform()
         self.canvas.set_images(small, None)
         w, h = img.size
-        self.status.setText(f"{img.path.name} - {w}x{h} ({img.megapixels:.1f} MP)")
+        self.status.setText(f"{img.path.name} - {w}x{h} ({img.megapixels:.1f} MP), "
+                            f"{img.color_summary}")
         self._schedule_preview()
 
     @Slot(int, str)
@@ -618,6 +622,38 @@ class MainWindow(QMainWindow):
         if token == self._token:
             self.canvas.set_placeholder(message)
             self.status.setText(message)
+
+    # ------------------------------------------------------------ colour
+
+    def _display_icc(self) -> bytes | None:
+        """The profile of the monitor the window is on (cached per monitor)."""
+        handle = self.windowHandle()
+        screen = handle.screen() if handle else self.screen()
+        key = screen.name() if screen else ""
+        if key not in self._display_profiles:
+            centre = self.frameGeometry().center()
+            screens = QGuiApplication.screens()
+            self._display_profiles[key] = color.display_profile(
+                int(self.winId()), screens.index(screen) if screen in screens else 0,
+                (float(centre.x()), float(centre.y())))
+        return self._display_profiles[key]
+
+    def _update_color_transform(self) -> None:
+        img = self.current_image
+        if img is None:
+            return
+        self.canvas.set_color_transform(
+            color.DisplayTransform(img.working_icc, self._display_icc()))
+
+    def _on_screen_changed(self, _screen) -> None:
+        self._update_color_transform()      # moved to a monitor with another profile
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and not self._screen_hooked:
+            handle.screenChanged.connect(self._on_screen_changed)
+            self._screen_hooked = True
 
     # ------------------------------------------------------------ preview
 

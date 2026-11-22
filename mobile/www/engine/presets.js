@@ -12,7 +12,8 @@ export function defaultSettings() {
     writeOptout: true,
     credit: "",
     copyright: "",
-    outputFormat: "png", // "png" | "jpeg"
+    outputFormat: "source", // "source" (same as the original) | "png" | "jpeg"
+    settingsVersion: 2,
     jpegQuality: 0.95,
     useGpu: true,        // a device preference; never changes the result's strength
     saveTo: "ask",       // "ask" | "gallery" | "folder"  (where protected copies go)

@@ -163,7 +163,7 @@ def protect_one(src: Path, settings: Settings, *, output_dir: str | None = None,
         h, w = result.rgb.shape[:2]
         entry.update(status="ok", output=str(result.saved_to), width=w, height=h,
                      passes=result.applied, metrics=_metrics_dict(result.metrics),
-                     note=result.note or None)
+                     color=result.color, note=result.note or None)
     except Exception as exc:  # noqa: BLE001 - report it, keep the batch going
         entry["error"] = f"{exc.__class__.__name__}: {exc}" if not str(exc) else str(exc)
     entry["seconds"] = round(time.perf_counter() - started, 2)
@@ -265,6 +265,9 @@ def cmd_protect(args) -> int:
             detail = (f"{m['psnr_db']:.1f} dB, {m['visibility'].lower()}, "
                       f"{m['durability'] * 100:.0f}% durable" if m else "saved")
             rep.say(f"{label}: {detail}  ({entry['seconds']:.1f}s) -> {entry['output']}")
+            col = entry.get("color") or {}
+            if col.get("input") != col.get("output"):
+                rep.say(f"    colour: {col.get('input')} -> {col.get('output')}")
         elif entry["status"] == "skipped":
             rep.say(f"{label}: skipped, {entry['output']} exists")
         else:
@@ -297,11 +300,13 @@ def cmd_report(args) -> int:
             result = pipeline.protect(img, settings, measure=True, progress=cb)
             rep.end_progress_line()
             results.append({"input": str(path), "status": "ok", "width": img.size[0],
-                            "height": img.size[1], "passes": result.applied,
+                            "height": img.size[1], "color": {"input": img.color_summary},
+                            "passes": result.applied,
                             "metrics": _metrics_dict(result.metrics),
                             "seconds": round(result.seconds, 2)})
             rep.say(f"\n{path.name}  {img.size[0]}x{img.size[1]}  "
                     f"({img.megapixels:.1f} MP, {result.seconds:.1f}s)")
+            rep.say(f"  colour: {img.color_summary}")
             rep.say(f"  passes: {', '.join(result.applied) or 'none'}")
             for name, value in (result.metrics.as_rows() if result.metrics else []):
                 rep.say(f"  {name:<24} {value}")

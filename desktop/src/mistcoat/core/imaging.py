@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageCms
+from PIL import Image
+
+from . import color, deep
 
 Image.MAX_IMAGE_PIXELS = None  # artists legitimately have huge scans
 
@@ -22,16 +24,34 @@ SUPPORTED_SUFFIXES = {
 
 @dataclass
 class LoadedImage:
-    """An image decoded to float32 RGB in 0..1 plus everything needed to save it back."""
+    """An image decoded to float32 RGB in 0..1 plus everything needed to save
+    it back the way it came in: colour model, bit depth, profile, resolution.
+
+    ``rgb`` holds the file's own values for RGB and greyscale images (no
+    colour conversion), and values in ``working_icc`` for CMYK and Lab, whose
+    original pixels stay in ``native``.
+    """
 
     rgb: np.ndarray                 # (H, W, 3) float32, 0..1
     alpha: np.ndarray | None        # (H, W) float32, 0..1, or None
-    icc_profile: bytes | None
+    icc_profile: bytes | None       # the profile to embed when saving
     source_mode: str
     source_format: str | None
     path: Path | None = None
     exif: bytes | None = None
     extra: dict = field(default_factory=dict)
+    bits: int = 8                   # 8 or 16 bits per channel in the file
+    color_model: str = "RGB"        # "RGB", "GRAY", "CMYK" or "LAB"
+    working_icc: bytes | None = None  # what ``rgb`` is in; None means sRGB
+    native: np.ndarray | None = None  # CMYK/Lab pixels, 0..1
+    converter: object = None        # color.Converter for CMYK/Lab
+    dpi: tuple[float, float] | None = None
+    profile_note: str = ""          # where the profile came from, if not embedded
+
+    def __post_init__(self):
+        if (self.working_icc is None and self.icc_profile
+                and self.color_model in ("RGB", "GRAY")):
+            self.working_icc = self.icc_profile
 
     @property
     def size(self) -> tuple[int, int]:
@@ -43,47 +63,136 @@ class LoadedImage:
         h, w = self.rgb.shape[:2]
         return (h * w) / 1_000_000
 
+    @property
+    def color_summary(self) -> str:
+        """e.g. "16-bit RGB, Adobe RGB (1998)" for the status line and reports."""
+        model = {"GRAY": "greyscale"}.get(self.color_model, self.color_model)
+        name = color.profile_name(self.icc_profile)
+        if self.color_model == "CMYK" and not self.icc_profile:
+            name = "no profile"
+        if self.color_model == "LAB":
+            name = "CIE L*a*b*"
+        note = f" ({self.profile_note})" if self.profile_note else ""
+        return f"{self.bits}-bit {model}, {name}{note}"
+
+
+_DEEP_MODES = ("RGB", "RGBA", "CMYK", "LA")
+
+
+def _dpi(info: dict) -> tuple[float, float] | None:
+    dpi = info.get("dpi")
+    try:
+        if dpi and float(dpi[0]) > 0 and float(dpi[1]) > 0:
+            return float(dpi[0]), float(dpi[1])
+    except (TypeError, ValueError, IndexError):
+        pass
+    return None
+
 
 def load_image(path: str | Path) -> LoadedImage:
+    """Decode an image without changing its colours.
+
+    Handles RGB, greyscale, palette, CMYK and Lab, 8 and 16 bits per channel,
+    any embedded ICC profile, and the profiles PNGs and cameras imply without
+    embedding one (PNG gAMA/cHRM, EXIF "Adobe RGB").
+    """
     path = Path(path)
     with Image.open(path) as im:
-        im.load()
         source_mode = im.mode
         source_format = im.format
-        icc = im.info.get("icc_profile")
-        exif_bytes = im.info.get("exif")
+        info = dict(im.info)
+        icc = info.get("icc_profile") or None
+        exif_bytes = info.get("exif")
+        # Before anything else: reading EXIF can make Pillow decode the image,
+        # after which it no longer says how the file stores its samples.
+        deep16 = source_mode in _DEEP_MODES and deep.is_16bit(im)
+        gray_alpha = deep.first_rawmode(im).startswith("LA")   # 16-bit LA opens as RGBA
+        try:
+            exif_obj = im.getexif()
+        except Exception:  # noqa: BLE001
+            exif_obj = None
+        if not deep16:
+            im.load()
+            values, model, bits, has_alpha, note = _decode(im)
 
-        # Normalise exotic modes (CMYK scans, palettes, 16-bit TIFFs) to 8-bit RGB(A).
-        if im.mode == "CMYK":
-            if icc:
-                try:
-                    srgb = ImageCms.createProfile("sRGB")
-                    src = ImageCms.ImageCmsProfile(io.BytesIO(icc))
-                    im = ImageCms.profileToProfile(im, src, srgb, outputMode="RGB")
-                    icc = None  # now plain sRGB
-                except Exception:
-                    im = im.convert("RGB")
-            else:
-                im = im.convert("RGB")
+    if deep16:
+        arr = deep.read_16bit(path, source_mode)
+        if arr is None:                             # fall back to Pillow's 8 bits
+            with Image.open(path) as im:
+                im.load()
+                values, model, bits, has_alpha, note = _decode(im)
+        else:
+            values = arr.astype(np.float32) / 65535.0
+            model = {"RGB": "RGB", "RGBA": "RGB", "CMYK": "CMYK", "LA": "GRAY"}[source_mode]
+            bits, has_alpha, note = 16, source_mode in ("RGBA", "LA"), ""
+            if gray_alpha and values.shape[2] == 4:
+                values, model = values[:, :, [0, 3]], "GRAY"
 
-        if im.mode in ("I;16", "I;16B", "I;16L", "I", "F"):
-            arr = np.asarray(im).astype(np.float32)
-            hi = float(arr.max()) if arr.max() > 0 else 1.0
-            scale = 65535.0 if hi > 255 else 255.0
-            arr = np.clip(arr / scale, 0, 1)
-            rgb = np.repeat(arr[:, :, None], 3, axis=2)
-            return LoadedImage(rgb.astype(np.float32), None, None, source_mode,
-                               source_format, path, exif_bytes)
+    alpha = None
+    if has_alpha:
+        alpha = np.ascontiguousarray(values[:, :, -1])
+        values = values[:, :, :-1]
 
-        has_alpha = im.mode in ("RGBA", "LA", "PA") or "transparency" in im.info
-        im = im.convert("RGBA" if has_alpha else "RGB")
+    # A profile only counts if it describes this kind of data.
+    want = {"RGB": "RGB", "GRAY": "GRAY", "CMYK": "CMYK", "LAB": "Lab"}[model]
+    if icc and color.profile_space(icc) != want:
+        icc = None
+    if model == "RGB" and not icc:
+        if source_format == "PNG" and "srgb" not in info:
+            icc = color.profile_from_png(info)
+            note = note or ("from the PNG's gamma and chromaticity" if icc else "")
+        if not icc and color.exif_says_adobe_rgb(exif_obj):
+            icc, note = color.ADOBE_RGB, "from the camera's EXIF"
+
+    img = LoadedImage(
+        rgb=None, alpha=alpha, icc_profile=icc, source_mode=source_mode,
+        source_format=source_format, path=path, exif=exif_bytes, bits=bits,
+        color_model=model, dpi=_dpi(info), profile_note=note)
+    if model in ("CMYK", "LAB"):
+        conv = color.Converter(model, icc)
+        img.native, img.converter = values, conv
+        img.rgb = conv.to_rgb(values)
+        img.working_icc = conv.working_icc
+    elif model == "GRAY":
+        img.rgb = np.ascontiguousarray(np.repeat(values[:, :, :1], 3, axis=2))
+        img.working_icc = icc
+    else:
+        img.rgb = np.ascontiguousarray(values[:, :, :3])
+        img.working_icc = icc
+    img.rgb = img.rgb.astype(np.float32, copy=False)
+    return img
+
+
+def _decode(im: Image.Image):
+    """Pillow's decoded image -> (values (H, W, C) float 0..1, model, bits,
+    has_alpha, note)."""
+    mode = im.mode
+    note = ""
+    if mode in ("I;16", "I;16B", "I;16L", "I;16N", "I", "F"):
+        arr = np.asarray(im).astype(np.float32)
+        hi = float(arr.max()) if arr.size and arr.max() > 0 else 1.0
+        is16 = mode.startswith("I;16") or hi > 255
+        arr = np.clip(arr / (65535.0 if is16 else 255.0), 0, 1)
+        return arr[:, :, None], "GRAY", 16 if is16 else 8, False, ""
+    if mode == "1":
+        im, note = im.convert("L"), "black-and-white, saved as greyscale"
+        mode = "L"
+    if mode == "La":
+        im, mode = im.convert("LA"), "LA"
+    if mode in ("L", "LA"):
         arr = np.asarray(im).astype(np.float32) / 255.0
-
-    if arr.shape[2] == 4:
-        return LoadedImage(np.ascontiguousarray(arr[:, :, :3]),
-                           np.ascontiguousarray(arr[:, :, 3]),
-                           icc, source_mode, source_format, path, exif_bytes)
-    return LoadedImage(arr, None, icc, source_mode, source_format, path, exif_bytes)
+        arr = arr[:, :, None] if arr.ndim == 2 else arr
+        return arr, "GRAY", 8, mode == "LA", note
+    if mode == "CMYK":
+        return np.asarray(im).astype(np.float32) / 255.0, "CMYK", 8, False, ""
+    if mode == "LAB":
+        return np.asarray(im).astype(np.float32) / 255.0, "LAB", 8, False, ""
+    if mode in ("P", "PA"):
+        note = "palette image, saved as full colour"
+    has_alpha = mode in ("RGBA", "RGBa", "PA") or (
+        mode in ("P", "L", "RGB") and "transparency" in im.info)
+    im = im.convert("RGBA" if has_alpha else "RGB")
+    return np.asarray(im).astype(np.float32) / 255.0, "RGB", 8, has_alpha, note
 
 
 def to_pil(img: LoadedImage, rgb: np.ndarray | None = None) -> Image.Image:

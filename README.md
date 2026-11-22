@@ -89,6 +89,24 @@ pick a level, check the preview (*Hold to compare*, *View 1:1*), then
 save picker), Photos / the gallery, or a folder you set once under
 *Advanced*; **Share** sends it to another app instead.
 
+**Colour:** a protected copy comes out the way the original went in. By
+default it has the same format, colour mode, bit depth, ICC profile and
+resolution, and the preview shows the true colours on your screen.
+
+| | Desktop | Phone / tablet |
+|---|---|---|
+| Colour modes | RGB, greyscale, CMYK, Lab | RGB |
+| Bit depth | 8 and 16 bits per channel (16-bit PNG and TIFF stay 16-bit) | 8 bits |
+| Profiles kept | any ICC profile (sRGB, Adobe RGB, Display P3, ProPhoto, scanner, camera, printer), plus Adobe RGB from camera EXIF and PNG gamma/chromaticity | sRGB, Display P3, Adobe RGB, ProPhoto and other matrix RGB profiles; anything else becomes Display P3 |
+| Preview | converted to the monitor's own profile | shown in Display P3 on screens that have it |
+
+CMYK and Lab images are protected through a wide RGB working space, and
+only the change is converted back. The black channel, ink limits and pure
+black text stay exactly as they were. A format that can't hold the original
+mode gets the nearest equivalent, with the matching profile. For example,
+CMYK saved as PNG becomes RGB, and a phone saves HEIC as JPEG in Display P3.
+Palette and 1-bit images are saved as full colour and greyscale.
+
 **Command line and add-ons:** everything also runs headless, without a
 window (and on Windows without a console flashing up), with JSON output for
 other programs:
@@ -220,8 +238,7 @@ change, same durability.
 - Phones process at up to 8 MP by default (16 MP selectable) to stay within
   mobile memory limits; the app says so when it downscales. Use the desktop
   app for full-resolution scans.
-- Images are processed as 8-bit sRGB. 16-bit and CMYK inputs are converted.
-  Desktop keeps the embedded ICC profile; mobile browsers convert to sRGB.
+- Phones work in 8 bits, and keep RGB profiles only (see *Colour* above).
 
 ## Installing on Linux
 

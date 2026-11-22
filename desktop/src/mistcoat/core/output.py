@@ -17,10 +17,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import numpy as np
 from PIL import Image
 from PIL.PngImagePlugin import PngInfo
 
-from .imaging import LoadedImage, to_pil
+from . import color, deep
+from .imaging import LoadedImage
 
 PLUS_PROHIBIT_AI = "http://ns.useplus.org/ldf/vocab/DMI-PROHIBITED-AIMLTRAINING"
 
@@ -140,24 +142,106 @@ def resolve_format(src: LoadedImage, requested: str) -> str:
     return "PNG"
 
 
+def output_model(src: LoadedImage, fmt: str) -> str:
+    """The colour model the saved file will have: the source's, unless the
+    chosen format cannot store it (CMYK and Lab only in TIFF/JPEG and TIFF)."""
+    model = src.color_model
+    if model == "CMYK" and fmt not in ("JPEG", "TIFF"):
+        return "RGB"
+    if model == "LAB" and fmt != "TIFF":
+        return "RGB"
+    if model == "GRAY" and fmt in ("WEBP", "BMP"):
+        return "RGB"
+    return model
+
+
+def output_bits(src: LoadedImage, fmt: str) -> int:
+    return 16 if src.bits == 16 and fmt in ("PNG", "TIFF") else 8
+
+
+def _output_icc(src: LoadedImage, model: str) -> bytes | None:
+    if model == src.color_model:
+        return src.icc_profile
+    if model == "RGB" and src.color_model in ("CMYK", "LAB"):
+        return src.working_icc              # shown and saved in the working RGB
+    return None                             # e.g. a grey profile cannot describe RGB
+
+
+def describe_output(src: LoadedImage, fmt: str) -> str:
+    """e.g. "16-bit RGB, Adobe RGB (1998)": what ``save_image`` will write."""
+    fmt = fmt.upper()
+    model = output_model(src, fmt)
+    icc = _output_icc(src, model)
+    if model == "LAB":
+        name = "CIE L*a*b*"
+    elif icc or model == "RGB":
+        name = color.profile_name(icc)
+    else:
+        name = "no profile"
+    label = {"GRAY": "greyscale"}.get(model, model)
+    return f"{output_bits(src, fmt)}-bit {label}, {name}"
+
+
 def save_image(src: LoadedImage, rgb, dest: Path, fmt: str,
                opts: MetadataOptions, jpeg_quality: int = 95) -> Path:
-    """Write the protected pixels to ``dest``, carrying colour and metadata over."""
+    """Write the protected pixels to ``dest`` the way the source came in: same
+    colour model, bit depth, ICC profile and resolution, as far as ``fmt``
+    allows, plus the opt-out metadata."""
     fmt = fmt.upper()
-    im = to_pil(src, rgb)
-    if fmt == "JPEG" and im.mode == "RGBA":
-        # JPEG has no alpha; composite onto white rather than failing.
-        bg = Image.new("RGB", im.size, (255, 255, 255))
-        bg.paste(im, mask=im.getchannel("A"))
-        im = bg
+    model = output_model(src, fmt)
+    bits = output_bits(src, fmt)
+    alpha = src.alpha
+    rgb = np.asarray(rgb, np.float32)
+    if alpha is not None and (fmt == "JPEG" or model in ("CMYK", "LAB")):
+        # No alpha in JPEG (or alongside CMYK here): composite onto white
+        # rather than failing.
+        a = alpha[:, :, None]
+        rgb = rgb * a + (1.0 - a)
+        alpha = None
 
-    params: dict = {}
-    if src.icc_profile:
-        params["icc_profile"] = src.icc_profile
+    icc = _output_icc(src, model)
+    if model in ("CMYK", "LAB"):
+        if alpha is None and src.alpha is not None:
+            # Keep the change but on the composited image.
+            before = src.rgb * src.alpha[:, :, None] + (1.0 - src.alpha[:, :, None])
+        else:
+            before = src.rgb
+        channels = src.converter.apply_change(src.native, before, rgb)
+    elif model == "GRAY":
+        channels = rgb.mean(axis=2, keepdims=True)
+    else:
+        channels = rgb
+    if alpha is not None:
+        channels = np.concatenate([channels, alpha[:, :, None]], axis=2)
 
     exif = _exif_for(src, opts)
     xmp = build_xmp(opts) if (opts.write_optout or opts.credit
                               or opts.copyright_notice) else ""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if bits == 16:
+        arr = (np.clip(channels, 0, 1) * 65535.0 + 0.5).astype(np.uint16)
+        if fmt == "PNG":
+            deep.write_png16(dest, arr, icc=icc, dpi=src.dpi, exif=exif.tobytes(), xmp=xmp)
+        else:
+            deep.write_tiff16(dest, arr, photometric={"RGB": "rgb", "GRAY": "gray",
+                                                      "CMYK": "cmyk"}[model],
+                              icc=icc, dpi=src.dpi, xmp=xmp, artist=opts.credit,
+                              copyright_notice=opts.copyright_notice,
+                              orientation=exif.get(0x0112))
+        return dest
+
+    arr = (np.clip(channels, 0, 1) * 255.0 + 0.5).astype(np.uint8)
+    pil_mode = {("RGB", False): "RGB", ("RGB", True): "RGBA", ("GRAY", False): "L",
+                ("GRAY", True): "LA", ("CMYK", False): "CMYK",
+                ("LAB", False): "LAB"}[(model, alpha is not None)]
+    im = Image.fromarray(arr[:, :, 0] if pil_mode == "L" else arr, pil_mode)
+
+    params: dict = {}
+    if icc:
+        params["icc_profile"] = icc
+    if src.dpi and fmt in ("JPEG", "PNG", "TIFF"):
+        params["dpi"] = src.dpi
 
     if fmt == "JPEG":
         params.update(quality=jpeg_quality, subsampling=0, optimize=True,
@@ -179,7 +263,6 @@ def save_image(src: LoadedImage, rgb, dest: Path, fmt: str,
     elif fmt == "TIFF":
         params.update(compression="tiff_lzw", exif=exif.tobytes())
 
-    dest.parent.mkdir(parents=True, exist_ok=True)
     try:
         im.save(dest, format=fmt, **params)
     except (OSError, ValueError, TypeError):
