@@ -35,6 +35,13 @@ class Settings:
     credit: str = ""
     copyright_notice: str = ""
 
+    # Visible watermark, drawn in before the protection runs.
+    watermark: bool = False
+    watermark_text: str = "SAMPLE"
+    watermark_layout: str = "tiled"        # "tiled" | "centre" | "corner"
+    watermark_resistance: str = "strong"   # "plain" | "strong" | "maximum"
+    watermark_opacity: float = 0.5
+
     # Output.
     output_format: str = "source"   # "source" | "png" | "jpeg" | "webp"
     jpeg_quality: int = 95

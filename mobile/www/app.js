@@ -286,6 +286,14 @@ function setupControls() {
   $("credit").addEventListener("input", (ev) => { state.settings.credit = ev.target.value; saveSettings(); });
   $("copyright").addEventListener("input", (ev) => { state.settings.copyright = ev.target.value; saveSettings(); });
   $("format").addEventListener("change", (ev) => { state.settings.outputFormat = ev.target.value; saveSettings(); });
+
+  // Visible watermark. Each change re-renders the preview only while it is on.
+  const wmChanged = () => changed(state.settings.watermark);
+  $("wm").addEventListener("change", (ev) => { state.settings.watermark = ev.target.checked; changed(); });
+  $("wm-text").addEventListener("input", (ev) => { state.settings.watermarkText = ev.target.value; wmChanged(); });
+  $("wm-layout").addEventListener("change", (ev) => { state.settings.watermarkLayout = ev.target.value; wmChanged(); });
+  $("wm-resistance").addEventListener("change", (ev) => { state.settings.watermarkResistance = ev.target.value; wmChanged(); });
+  $("wm-opacity").addEventListener("input", (ev) => { state.settings.watermarkOpacity = Number(ev.target.value) / 100; wmChanged(); });
   $("maxpx").addEventListener("change", (ev) => {
     state.maxPixels = Number(ev.target.value);
     const i = state.index;
@@ -332,7 +340,24 @@ function syncControls() {
   $("credit").value = s.credit;
   $("copyright").value = s.copyright;
   $("format").value = s.outputFormat;
+  $("wm").checked = !!s.watermark;
+  $("wm-options").disabled = !s.watermark;
+  if (document.activeElement !== $("wm-text")) $("wm-text").value = s.watermarkText ?? "SAMPLE";
+  $("wm-layout").value = s.watermarkLayout ?? "tiled";
+  $("wm-resistance").value = s.watermarkResistance ?? "strong";
+  $("wm-hint").textContent = `${WM_HINTS[s.watermarkResistance] ?? WM_HINTS.strong} ` +
+    "No visible watermark is impossible to remove.";
+  $("wm-opacity").value = Math.round((s.watermarkOpacity ?? 0.5) * 100);
+  $("wm-opacity-out").textContent = `${Math.round((s.watermarkOpacity ?? 0.5) * 100)}%`;
 }
+
+const WM_HINTS = {
+  plain: "An even grid of identical marks. Neatest, but watermark-removal tools handle this kind easily.",
+  strong: "Every mark differs slightly in position, angle, size and opacity, with a soft textured " +
+    "edge, so removal tools have no single shape to learn.",
+  maximum: "As Strong, plus a second row of smaller marks, and the lettering is woven into the " +
+    "picture's texture. Hardest to remove cleanly, but busier to look at.",
+};
 
 function updateGoLabel() {
   const n = state.files.length;

@@ -4,6 +4,7 @@ import { clamp01, resizeLongest } from "./imaging.js";
 import { ALL_PASSES, PassContext } from "./passes.js";
 import { passStrength } from "./presets.js";
 import { measure } from "./quality.js";
+import { applyWatermark, watermarkOptions } from "./watermark.js";
 
 const noop = () => {};
 
@@ -101,14 +102,19 @@ async function harden(original, prot, w, h, settings, ceiling, codec, base, prog
  * Protect an image. ``codec`` supplies {training, heldOut} transform lists;
  * pass null to skip hardening and durability measurement.
  */
-export async function protect(rgb, w, h, settings, { codec = null, progress = noop, doMeasure = true } = {}) {
+export async function protect(rgb, w, h, settings,
+  { codec = null, progress = noop, doMeasure = true, alpha = null, glyphs } = {}) {
   const t0 = Date.now();
+  // The watermark is drawn first and protected with the rest of the picture;
+  // the quality figures measure only the protection.
+  const wm = watermarkOptions(settings);
+  if (wm) ({ rgb, alpha } = applyWatermark(rgb, alpha, w, h, wm, glyphs));
   const original = rgb;
   const ctx = await new PassContext(original, w, h, settings.seed).prepare();
   const active = ALL_PASSES.filter((p) => passStrength(settings, p.name) > 0);
   if (!active.length) {
     return { rgb: Float32Array.from(original), metrics: null, applied: [], seconds: 0,
-      note: "No passes enabled - output is identical to the input." };
+      note: "No passes enabled - output is identical to the input.", alpha };
   }
 
   const ceiling = deltaCeiling(ctx, settings.strength);
@@ -140,7 +146,7 @@ export async function protect(rgb, w, h, settings, { codec = null, progress = no
   }
   progress("Done", 1);
   return { rgb: current, metrics, applied: active.map((p) => p.name),
-    seconds: (Date.now() - t0) / 1000, note: "" };
+    seconds: (Date.now() - t0) / 1000, note: "", alpha };
 }
 
 /** Fast downscaled preview: no hardening, as on desktop. */

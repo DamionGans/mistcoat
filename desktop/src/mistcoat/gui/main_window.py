@@ -337,6 +337,8 @@ class MainWindow(QMainWindow):
         mv.addWidget(self.copyright_edit)
         lay.addWidget(meta_box)
 
+        lay.addWidget(self._build_watermark_box())
+
         # --- output
         out_box = QGroupBox("Output")
         ov = QVBoxLayout(out_box)
@@ -396,6 +398,108 @@ class MainWindow(QMainWindow):
         scroll.setMinimumWidth(330)
         scroll.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         return scroll
+
+    WATERMARK_LAYOUTS = (("Repeated across the picture", "tiled"),
+                         ("One large mark in the centre", "centre"),
+                         ("Small mark in the corner", "corner"))
+    WATERMARK_RESISTANCE = (
+        ("Plain", "plain",
+         "An even grid of identical marks. Neatest, but watermark-removal "
+         "tools handle this kind easily."),
+        ("Strong", "strong",
+         "Every mark differs slightly in position, angle, size and opacity, "
+         "with a soft textured edge, so removal tools have no single shape "
+         "to learn."),
+        ("Maximum", "maximum",
+         "As Strong, plus a second row of smaller marks, and the lettering is "
+         "woven into the picture's texture. Hardest to remove cleanly, but "
+         "busier to look at."),
+    )
+
+    def _build_watermark_box(self) -> QGroupBox:
+        box = QGroupBox("Visible watermark")
+        v = QVBoxLayout(box)
+        self.wm_check = QCheckBox("Add a visible watermark")
+        self.wm_check.setToolTip(
+            "Writes text such as “SAMPLE” into the picture, so anyone "
+            "who sees it knows it is a sample. It is drawn before the "
+            "protection, so it is protected too.")
+        self.wm_check.setChecked(self.settings.watermark)
+        v.addWidget(self.wm_check)
+
+        self.wm_text = QLineEdit(self.settings.watermark_text)
+        self.wm_text.setPlaceholderText("Watermark text, e.g. SAMPLE")
+        self.wm_text.textChanged.connect(self._on_watermark_text)
+        v.addWidget(self.wm_text)
+
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.addWidget(QLabel("Placement"), 0, 0)
+        self.wm_layout = QComboBox()
+        for label, key in self.WATERMARK_LAYOUTS:
+            self.wm_layout.addItem(label, key)
+        self.wm_layout.currentIndexChanged.connect(
+            lambda _i: self._set_watermark("watermark_layout",
+                                           self.wm_layout.currentData()))
+        grid.addWidget(self.wm_layout, 0, 1)
+
+        grid.addWidget(QLabel("Hard to remove"), 1, 0)
+        self.wm_resist = QComboBox()
+        for i, (label, key, tip) in enumerate(self.WATERMARK_RESISTANCE):
+            self.wm_resist.addItem(label, key)
+            self.wm_resist.setItemData(i, tip, Qt.ToolTipRole)
+        self.wm_resist.setCurrentIndex(1)
+        self.wm_resist.currentIndexChanged.connect(self._on_watermark_resistance)
+        grid.addWidget(self.wm_resist, 1, 1)
+
+        grid.addWidget(QLabel("Opacity"), 2, 0)
+        row = QHBoxLayout()
+        self.wm_opacity = QSlider(Qt.Horizontal)
+        self.wm_opacity.setRange(10, 100)
+        self.wm_opacity.setValue(int(round(self.settings.watermark_opacity * 100)))
+        self.wm_opacity_value = QLabel(f"{self.wm_opacity.value()}%")
+        self.wm_opacity_value.setMinimumWidth(42)
+        self.wm_opacity_value.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.wm_opacity.valueChanged.connect(self._on_watermark_opacity)
+        row.addWidget(self.wm_opacity, 1)
+        row.addWidget(self.wm_opacity_value)
+        grid.addLayout(row, 2, 1)
+        grid.setColumnStretch(1, 1)
+        v.addLayout(grid)
+
+        self.wm_hint = theme.secondary(QLabel())
+        self.wm_hint.setWordWrap(True)
+        v.addWidget(self.wm_hint)
+        self._on_watermark_resistance(self.wm_resist.currentIndex())
+
+        self._wm_controls = (self.wm_text, self.wm_layout, self.wm_resist,
+                             self.wm_opacity, self.wm_opacity_value, self.wm_hint)
+        self.wm_check.toggled.connect(self._on_watermark_toggled)
+        self._on_watermark_toggled(self.settings.watermark)
+        return box
+
+    def _set_watermark(self, attr: str, value) -> None:
+        setattr(self.settings, attr, value)
+        if self.settings.watermark:
+            self._schedule_preview()
+
+    def _on_watermark_toggled(self, on: bool) -> None:
+        self.settings.watermark = on
+        for w in self._wm_controls:
+            w.setEnabled(on)
+        self._schedule_preview()
+
+    def _on_watermark_text(self, text: str) -> None:
+        self._set_watermark("watermark_text", text)
+
+    def _on_watermark_resistance(self, index: int) -> None:
+        _label, key, tip = self.WATERMARK_RESISTANCE[index]
+        self.wm_hint.setText(tip + " No visible watermark is impossible to remove.")
+        self._set_watermark("watermark_resistance", key)
+
+    def _on_watermark_opacity(self, value: int) -> None:
+        self.wm_opacity_value.setText(f"{value}%")
+        self._set_watermark("watermark_opacity", value / 100.0)
 
     def _build_action_bar(self) -> QWidget:
         bar = QWidget()

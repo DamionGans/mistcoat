@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from . import __version__
-from .core import imaging, output, pipeline
+from .core import imaging, output, pipeline, watermark
 from .core.passes import ALL_PASSES
 from .core.presets import DEFAULT_PRESET, PRESETS, PRESETS_BY_KEY, Settings
 
@@ -78,6 +78,22 @@ def settings_from(opts: dict) -> Settings:
         settings.credit = str(opts["credit"])
     if opts.get("copyright"):
         settings.copyright_notice = str(opts["copyright"])
+    wm = opts.get("watermark")
+    if wm:
+        settings.watermark = True
+        settings.watermark_text = "SAMPLE" if wm is True else str(wm)
+    if opts.get("watermark_layout"):
+        if opts["watermark_layout"] not in watermark.LAYOUTS:
+            raise UsageError(f"unknown watermark layout {opts['watermark_layout']!r} "
+                             f"(choose from {', '.join(watermark.LAYOUTS)})")
+        settings.watermark_layout = opts["watermark_layout"]
+    if opts.get("watermark_resistance"):
+        if opts["watermark_resistance"] not in watermark.RESISTANCE:
+            raise UsageError(f"unknown watermark resistance {opts['watermark_resistance']!r} "
+                             f"(choose from {', '.join(watermark.RESISTANCE)})")
+        settings.watermark_resistance = opts["watermark_resistance"]
+    if opts.get("watermark_opacity") is not None:
+        settings.watermark_opacity = max(0.05, min(1.0, float(opts["watermark_opacity"]) / 100.0))
     if opts.get("no_metadata"):
         settings.write_optout_metadata = False
     if opts.get("format"):
@@ -99,6 +115,10 @@ def _settings_summary(s: Settings) -> dict:
         "format": s.output_format,
         "metadata": s.write_optout_metadata,
         "seed": s.seed,
+        "watermark": ({"text": s.watermark_text, "layout": s.watermark_layout,
+                       "resistance": s.watermark_resistance,
+                       "opacity": round(s.watermark_opacity * 100)}
+                      if s.watermark else None),
     }
 
 
@@ -475,6 +495,16 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--seed", type=int)
         p.add_argument("--credit", help="artist name to embed")
         p.add_argument("--copyright", help="copyright notice to embed")
+        p.add_argument("--watermark", nargs="?", const="SAMPLE", metavar="TEXT",
+                       help="draw a visible watermark into the picture "
+                            "(default text: SAMPLE)")
+        p.add_argument("--watermark-layout", choices=list(watermark.LAYOUTS),
+                       help="tiled (default), centre or corner")
+        p.add_argument("--watermark-resistance", choices=list(watermark.RESISTANCE),
+                       help="how hard the watermark is to remove: plain, strong "
+                            "(default) or maximum")
+        p.add_argument("--watermark-opacity", type=float, metavar="5-100",
+                       help="watermark opacity in percent (default 50)")
         p.add_argument("--no-metadata", action="store_true",
                        help="do not embed the 'do not train' metadata")
         p.add_argument("--progress", choices=["auto", "none", "text", "json"], default="auto",

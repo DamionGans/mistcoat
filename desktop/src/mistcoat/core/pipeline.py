@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import accel, imaging, output, quality
+from . import accel, imaging, output, quality, watermark
 from .imaging import LoadedImage
 from .passes import ALL_PASSES, PassContext
 from .presets import Settings
@@ -25,6 +25,7 @@ class Result:
     saved_to: Path | None = None
     note: str = ""
     color: dict | None = None       # {"input": "...", "output": "..."} when saved
+    alpha: np.ndarray | None = None  # the transparency, when the watermark changed it
 
 
 def _noop(_stage: str, _frac: float) -> None:
@@ -126,6 +127,16 @@ def _harden(original: np.ndarray, protected: np.ndarray, settings: Settings,
     return best.astype(np.float32)
 
 
+def apply_watermark(rgb: np.ndarray, alpha: np.ndarray | None,
+                    settings: Settings) -> tuple[np.ndarray, np.ndarray | None]:
+    if not settings.watermark:
+        return rgb, alpha
+    return watermark.apply(rgb, alpha, text=settings.watermark_text,
+                           layout=settings.watermark_layout,
+                           resistance=settings.watermark_resistance,
+                           opacity=settings.watermark_opacity, seed=settings.seed)
+
+
 def protect(img: LoadedImage, settings: Settings, *,
             progress: Progress | None = None,
             measure: bool = True) -> Result:
@@ -133,14 +144,17 @@ def protect(img: LoadedImage, settings: Settings, *,
     progress = progress or _noop
     started = time.perf_counter()
 
-    original = img.rgb
+    # The watermark is part of the picture being protected: it is drawn
+    # first, and the quality figures measure only the protection on top.
+    original, alpha = apply_watermark(img.rgb, img.alpha, settings)
     ctx = PassContext(rgb=original, seed=settings.seed)
     current = original.astype(np.float32, copy=True)
 
     active = [p for p in ALL_PASSES if settings.pass_strength(p.name) > 0]
     if not active and not settings.harden:
         return Result(current, None, [], time.perf_counter() - started,
-                      note="No passes enabled - output is identical to the input.")
+                      note="No passes enabled - output is identical to the input.",
+                      alpha=alpha)
 
     ceiling = delta_ceiling(ctx, settings.strength)
 
@@ -179,7 +193,7 @@ def protect(img: LoadedImage, settings: Settings, *,
 
     progress("Done", 1.0)
     return Result(current, metrics, [p.name for p in active],
-                  time.perf_counter() - started)
+                  time.perf_counter() - started, alpha=alpha)
 
 
 def protect_file(path: str | Path, out_dir: str | Path | None, settings: Settings, *,
@@ -211,6 +225,8 @@ def protect_file(path: str | Path, out_dir: str | Path | None, settings: Setting
                                   settings.filename_suffix, settings.output_format)
     result.color = {"input": img.color_summary,
                     "output": output.describe_output(img, fmt)}
+    if result.alpha is not None:
+        img.alpha = result.alpha
     result.saved_to = output.save_image(img, result.rgb, dest, fmt, opts,
                                         jpeg_quality=settings.jpeg_quality)
     return result

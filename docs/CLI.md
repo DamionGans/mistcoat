@@ -74,6 +74,10 @@ Global options (before the command): `--gpu` / `--no-gpu`.
 | `--suffix TEXT` | file-name suffix with `-o` (default `_protected`) |
 | `--credit NAME`, `--copyright TEXT` | embedded in the file's metadata |
 | `--no-metadata` | do not embed the "do not train" declaration |
+| `--watermark [TEXT]` | draw a visible watermark into the picture (text defaults to `SAMPLE`) |
+| `--watermark-layout tiled\|centre\|corner` | repeated across the picture (default), once in the centre, or small in the bottom-right corner |
+| `--watermark-resistance plain\|strong\|maximum` | how hard the watermark is to remove (default `strong`; see the README) |
+| `--watermark-opacity 5-100` | watermark opacity in percent (default 50) |
 | `--quick` | skip the quality measurement (faster; `metrics` is null) |
 | `--json` | print one JSON document on stdout instead of text |
 | `--json-file FILE` | also write that JSON document to a file |
@@ -99,7 +103,8 @@ The original image is never overwritten, whatever `--on-exists` says.
   "command": "protect",
   "compute": "GPU (NVIDIA GeForce GTX 1050 Ti)",
   "settings": {"strength": 60.0, "passes": ["texture_warp", "dct_poison", "chroma", "hf_noise"],
-               "harden": true, "format": "source", "metadata": true, "seed": 20260101},
+               "harden": true, "format": "source", "metadata": true, "seed": 20260101,
+               "watermark": null},
   "ok": true,
   "results": [
     {
@@ -144,7 +149,9 @@ The first line Mistcoat prints is `{"event": "ready", "mistcoat": "0.1.0"}`.
 Commands: `protect` (fields as the options above, with underscores:
 `output_file`, `output_dir`, `on_exists`, `preset`, `strength`, `enable`,
 `disable`, `no_harden`, `format`, `jpeg_quality`, `credit`, `copyright`,
-`no_metadata`, `quick`, `progress`), `report`, `info`, `ping`, `quit`. A bad
+`no_metadata`, `watermark` (the text, or `true` for `SAMPLE`),
+`watermark_layout`, `watermark_resistance`, `watermark_opacity`, `quick`,
+`progress`), `report`, `info`, `ping`, `quit`. A bad
 request gets `{"id": …, "ok": false, "error": "…"}` and the server keeps
 running.
 

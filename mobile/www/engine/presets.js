@@ -12,6 +12,11 @@ export function defaultSettings() {
     writeOptout: true,
     credit: "",
     copyright: "",
+    watermark: false,            // a visible mark drawn into the picture
+    watermarkText: "SAMPLE",
+    watermarkLayout: "tiled",    // "tiled" | "centre" | "corner"
+    watermarkResistance: "strong", // "plain" | "strong" | "maximum"
+    watermarkOpacity: 0.5,
     outputFormat: "source", // "source" (same as the original) | "png" | "jpeg"
     settingsVersion: 2,
     jpegQuality: 0.95,

@@ -172,6 +172,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); height: 32px; }
 details { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
 summary { cursor: pointer; font-weight: 600; min-height: 36px; display: flex; align-items: center; }
 fieldset { border: 0; padding: 0; margin: 8px 0; }
+fieldset:disabled { opacity: .5; }
 legend { font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 4px; }
 .check { display: flex; gap: 10px; align-items: flex-start; padding: 8px 0; }
 .check input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }

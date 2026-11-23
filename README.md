@@ -107,6 +107,25 @@ mode gets the nearest equivalent, with the matching profile. For example,
 CMYK saved as PNG becomes RGB, and a phone saves HEIC as JPEG in Display P3.
 Palette and 1-bit images are saved as full colour and greyscale.
 
+**Visible watermark (optional, off by default):** writes text such as
+"SAMPLE" or "© your name – art sample" into the picture, so anyone who sees
+it knows it is a sample. It can be repeated across the picture, placed once
+in the centre, or put small in a corner, at an opacity you choose. It is
+drawn before the protection, so it is protected along with the rest. Three
+levels set how hard it is to remove:
+
+* **Plain:** an even grid of identical marks. Neatest, but watermark-removal
+  tools handle this kind easily.
+* **Strong** (default): every mark differs slightly in position, angle, size
+  and opacity, with a soft, textured edge, so there is no single shape for a
+  removal tool to learn.
+* **Maximum:** as Strong, plus a second row of smaller marks, and the
+  lettering is woven into the picture's texture, so removing the colour still
+  leaves it visible in the detail. Busier to look at.
+
+No visible watermark is impossible to remove: a determined person can paint
+it out by hand. These levels make that slower and leave traces.
+
 **Command line and add-ons:** everything also runs headless, without a
 window (and on Windows without a console flashing up), with JSON output for
 other programs:

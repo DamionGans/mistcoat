@@ -207,8 +207,9 @@ self.onmessage = async (e) => {
       const img = await loadFile(msg.file, msg.maxPixels);
       const progress = (stage, frac) =>
         self.postMessage({ id: msg.id, type: "progress", stage, frac });
-      const r = await protect(img.rgb, img.w, img.h, msg.settings, { codec, progress });
-      const out = await encodeOutput(r.rgb, img.alpha, img.w, img.h, msg.settings, msg.file, img.plan);
+      const r = await protect(img.rgb, img.w, img.h, msg.settings,
+        { codec, progress, alpha: img.alpha });
+      const out = await encodeOutput(r.rgb, r.alpha, img.w, img.h, msg.settings, msg.file, img.plan);
       reply({ type: "exported", bytes: out.bytes, mime: out.type, ext: out.ext,
         metrics: r.metrics, seconds: r.seconds, w: img.w, h: img.h, note: img.note },
       [out.bytes.buffer]);

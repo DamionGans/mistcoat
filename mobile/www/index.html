@@ -114,6 +114,34 @@
         </details>
       </div>
 
+      <div class="card">
+        <h3>Visible watermark</h3>
+        <label class="check"><input type="checkbox" id="wm"> <span>Add a visible watermark <small class="muted">Shows anyone who sees the picture that it is a sample. It is protected along with the rest.</small></span></label>
+        <fieldset id="wm-options" class="plain">
+          <label class="field"><span>Text</span><input type="text" id="wm-text" placeholder="e.g. SAMPLE" maxlength="80"></label>
+          <label class="field"><span>Placement</span>
+            <select id="wm-layout">
+              <option value="tiled">Repeated across the picture</option>
+              <option value="centre">One large mark in the centre</option>
+              <option value="corner">Small mark in the corner</option>
+            </select>
+          </label>
+          <label class="field"><span>Hard to remove</span>
+            <select id="wm-resistance">
+              <option value="plain">Plain</option>
+              <option value="strong">Strong</option>
+              <option value="maximum">Maximum</option>
+            </select>
+          </label>
+          <p id="wm-hint" class="muted small"></p>
+          <label class="slider-row">
+            <span>Opacity</span>
+            <input type="range" id="wm-opacity" min="10" max="100" step="1">
+            <output id="wm-opacity-out">50%</output>
+          </label>
+        </fieldset>
+      </div>
+
       <div class="actions">
         <label class="btn ghost">
           Add more
